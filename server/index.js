@@ -2,107 +2,198 @@ import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { STUDENT_NAME, prepareSystem, teachSystem, reviewSystem } from "./prompts.js";
-import { mockPrepare, mockChat } from "./mock.js";
+import {
+  STUDENT_NAME,
+  DEPTHS,
+  depthOf,
+  prepareSystem,
+  judgeSystem,
+  stuSystem,
+  stuDirection,
+  reviewSystem,
+} from "./prompts.js";
+import { allItems, stageOf } from "./rubric.js";
+import { mockPrepare, mockJudge, mockReply } from "./mock.js";
 
 const MODEL = "claude-opus-5-5";
+// The judge is the part that has to be right, so it thinks harder than Stu does.
+const JUDGE_EFFORT = "medium";
+const STU_EFFORT = "low";
 const MOCK = process.env.MOCK === "1";
 const client = MOCK ? null : new Anthropic();
 
-const ConceptsSchema = z.object({
-  concepts: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      mustExplain: z.string(),
-    })
+const RubricSchema = z.object({
+  ideas: z.array(z.object({ id: z.string(), name: z.string(), cover: z.string(), explain: z.string() })),
+  connections: z.array(
+    z.object({ id: z.string(), name: z.string(), ideas: z.array(z.string()), explain: z.string() })
   ),
 });
 
-const TeachTurnSchema = z.object({
-  reply: z.string(),
-  newlyUnderstood: z.array(z.string()),
+const VerdictSchema = z.object({
+  credited: z.array(z.object({ item: z.string(), evidence: z.string() })),
+  revoked: z.array(z.string()),
+  problems: z.array(
+    z.object({
+      kind: z.enum(["wrong", "vague", "missing_step", "undefined_term", "off_topic"]),
+      quote: z.string(),
+      note: z.string(),
+    })
+  ),
+  stuFocus: z.string(),
+  stuMistake: z.string(),
 });
 
-// One structured call. Server-side fallbacks cover the rare safety decline.
-async function ask({ system, messages, schema, effort }) {
+// Server-side fallbacks cover the rare safety decline.
+const BASE = { model: MODEL, max_tokens: 16000, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
+
+async function askStructured({ system, messages, schema, effort }) {
   const response = await client.beta.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...BASE,
     output_config: { effort, format: betaZodOutputFormat(schema) },
     system,
     messages,
   });
-  if (response.stop_reason === "refusal") {
-    throw new Error("The model declined to respond to that message.");
-  }
+  if (response.stop_reason === "refusal") throw new Error("The model declined to respond to that message.");
   if (!response.parsed_output) throw new Error("Model returned unparseable output.");
   return response.parsed_output;
 }
 
-const toApiMessages = (messages) =>
-  messages.map((m) => ({ role: m.role, content: m.content }));
+async function askText({ system, messages, effort }) {
+  const response = await client.beta.messages.create({ ...BASE, output_config: { effort }, system, messages });
+  if (response.stop_reason === "refusal") throw new Error("The model declined to respond to that message.");
+  return response.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+}
+
+function itemName(topic, item) {
+  const [kind, id] = item.split(":");
+  if (kind === "link") return topic.connections.find((k) => k.id === id)?.name;
+  const idea = topic.ideas.find((i) => i.id === id)?.name;
+  return kind === "cover" ? `what "${idea}" is` : `how "${idea}" works`;
+}
+
+// Evidence has to be something the teacher actually typed, so the judge can't credit from vibes.
+const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const quotedByTeacher = (evidence, teacherText) => {
+  const q = normalize(evidence);
+  return q.split(" ").length >= 3 && teacherText.includes(q);
+};
+
+const transcript = (messages) =>
+  messages
+    .map((m, i) => {
+      const who = m.role === "user" ? "Teacher" : STUDENT_NAME;
+      const tag = i === messages.length - 1 ? " (NEWEST)" : "";
+      return `${who}${tag}: ${m.content}`;
+    })
+    .join("\n\n");
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, mock: MOCK, student: STUDENT_NAME }));
 
-// Turn pasted course notes into a checklist of concepts the user must teach.
+app.get("/api/depths", (_req, res) =>
+  res.json(Object.entries(DEPTHS).map(([key, d]) => ({ key, label: d.label, blurb: d.blurb })))
+);
+
+// Turn course notes into a depth-specific rubric: ideas to cover and explain, plus connections.
 app.post("/api/topics/prepare", async (req, res, next) => {
   try {
-    const { title, notes } = req.body;
+    const { title, notes, depth: depthKey } = req.body;
     if (!title?.trim() || !notes?.trim()) {
       return res.status(400).json({ error: "Title and notes are required." });
     }
     if (MOCK) return res.json(mockPrepare(title));
-    const out = await ask({
-      system: prepareSystem,
+    const out = await askStructured({
+      system: prepareSystem(depthOf(depthKey)),
       messages: [{ role: "user", content: `Topic: ${title}\n\nCourse notes:\n${notes}` }],
-      schema: ConceptsSchema,
+      schema: RubricSchema,
       effort: "medium",
     });
-    const concepts = out.concepts.map((c, i) => ({ ...c, id: `c${i + 1}` }));
-    res.json({ concepts });
+    // Renumber ids so the client can rely on them, keeping connection references intact.
+    const idMap = new Map(out.ideas.map((idea, n) => [idea.id, `i${n + 1}`]));
+    const ideas = out.ideas.map((idea) => ({ ...idea, id: idMap.get(idea.id) }));
+    const connections = out.connections
+      .map((k, n) => ({ ...k, id: `k${n + 1}`, ideas: k.ideas.map((id) => idMap.get(id)).filter(Boolean) }))
+      .filter((k) => k.ideas.length > 0);
+    res.json({ ideas, connections });
   } catch (err) {
     next(err);
   }
 });
 
-// mode "teach": the student is clueless and tracks what it has learned.
-// mode "review": topic is complete; the student explains it back to help you re-learn.
+// mode "teach": hidden judge grades the teacher, then Stu reacts in character.
+// mode "review": topic is complete; Stu explains it back so the user can re-learn.
 app.post("/api/chat", async (req, res, next) => {
   try {
     const { topic, messages, mode } = req.body;
     if (!topic || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "topic and messages are required." });
     }
-    if (MOCK) return res.json(mockChat(topic, messages, mode));
+    const depth = depthOf(topic.depth);
+    const chat = messages.map((m) => ({ role: m.role, content: m.content }));
 
     if (mode === "review") {
-      const out = await ask({
-        system: reviewSystem(topic),
-        messages: toApiMessages(messages),
-        schema: z.object({ reply: z.string() }),
-        effort: "low",
-      });
-      return res.json({ reply: out.reply, newlyUnderstood: [] });
+      const reply = MOCK
+        ? mockReply(chat, "review")
+        : await askText({ system: reviewSystem(topic, depth), messages: chat, effort: STU_EFFORT });
+      return res.json({ reply, credited: [], revoked: [], problems: [] });
     }
 
-    const out = await ask({
-      system: teachSystem(topic),
-      messages: toApiMessages(messages),
-      schema: TeachTurnSchema,
-      effort: "low",
-    });
-    const valid = new Set(topic.concepts.map((c) => c.id));
-    const already = new Set(topic.understood);
-    res.json({
-      reply: out.reply,
-      newlyUnderstood: out.newlyUnderstood.filter((id) => valid.has(id) && !already.has(id)),
-    });
+    // 1. Judge
+    const raw = MOCK
+      ? mockJudge(topic, chat)
+      : await askStructured({
+          system: judgeSystem(topic, depth),
+          messages: [{ role: "user", content: `Conversation so far:\n\n${transcript(chat)}` }],
+          schema: VerdictSchema,
+          effort: JUDGE_EFFORT,
+        });
+
+    const valid = new Set(allItems(topic));
+    const teacherText = normalize(chat.filter((m) => m.role === "user").map((m) => m.content).join(" \n "));
+    const credited = { ...topic.credited };
+    const newly = [];
+    for (const c of raw.credited) {
+      if (!valid.has(c.item) || credited[c.item]) continue;
+      if (!MOCK && !quotedByTeacher(c.evidence, teacherText)) {
+        console.warn(`judge credit rejected, evidence not in teacher's words: ${c.item} "${c.evidence}"`);
+        continue;
+      }
+      credited[c.item] = c.evidence;
+      newly.push(c);
+      // Explaining an idea necessarily names it.
+      const [kind, id] = c.item.split(":");
+      if (kind === "explain" && !credited[`cover:${id}`]) {
+        credited[`cover:${id}`] = c.evidence;
+        newly.push({ item: `cover:${id}`, evidence: c.evidence });
+      }
+    }
+    const revoked = raw.revoked.filter((id) => credited[id] && !newly.some((c) => c.item === id));
+    for (const id of revoked) delete credited[id];
+
+    // 2. Stu, who only ever sees the conversation and the director note, never the notes.
+    const stage = stageOf(topic, credited);
+    const verdict = {
+      creditedNames: newly
+        .filter((c) => !newly.some((o) => o.item === c.item.replace(/^cover:/, "explain:") && o !== c))
+        .map((c) => itemName(topic, c.item)),
+      stuFocus: raw.stuFocus,
+      stuMistake: raw.stuMistake,
+    };
+    const reply = MOCK
+      ? mockReply(chat, "teach", verdict)
+      : await askText({
+          system: stuSystem(topic),
+          messages: [...chat, { role: "system", content: stuDirection(verdict, stage) }],
+          effort: STU_EFFORT,
+        });
+
+    res.json({ reply, credited: newly, revoked, problems: raw.problems });
   } catch (err) {
     next(err);
   }

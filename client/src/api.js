@@ -1,23 +1,27 @@
-async function post(path, body) {
+async function request(path, body) {
   const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    method: body ? "POST" : "GET",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
 
-export const prepareTopic = (title, notes) => post("/api/topics/prepare", { title, notes });
+export const getDepths = () => request("/api/depths");
+
+export const prepareTopic = (title, notes, depth) => request("/api/topics/prepare", { title, notes, depth });
 
 export const sendChat = (topic, messages, mode) =>
-  post("/api/chat", {
+  request("/api/chat", {
     topic: {
       title: topic.title,
       notes: topic.notes,
-      concepts: topic.concepts,
-      understood: topic.understood,
+      depth: topic.depth,
+      ideas: topic.ideas,
+      connections: topic.connections,
+      credited: topic.credited,
       teachLog: mode === "review" ? topic.teachLog : undefined,
     },
     messages,

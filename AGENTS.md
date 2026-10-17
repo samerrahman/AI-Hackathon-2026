@@ -5,19 +5,27 @@ Gemini, Copilot, etc.) work in this repo. Tool-specific files (`CLAUDE.md`,
 `GEMINI.md`, ...) only point here. **Edit this file, not those.**
 
 ## Project
-**Teach Pip**: a learn-by-teaching app. The user pastes course notes for a topic,
-and Claude extracts a checklist of concepts. The user then has to teach each one to
-"Pip", a deliberately dim AI learner that takes things literally, makes mistakes, and asks
-clarifying questions. Pip marks a concept learned only after a specific, correct
-explanation. Once every concept is taught, the same chat switches to **re-learn mode**,
-where Pip explains the topic back and quizzes the user.
+**Teach Stu**: a learn-by-teaching app. The user picks a depth (Big picture /
+Exam-ready / Expert), pastes course notes, and Claude builds a hidden rubric at that
+depth. The user teaches "Stu", a deliberately dim AI learner, in three stages: **cover**
+every idea, **explain** each one, then **connect** them. Once everything is taught, the
+same chat switches to **re-learn mode**, where Stu explains the topic back and quizzes the user.
+
+Each teaching turn makes two Claude calls (`claude-opus-5-5`):
+1. **Judge** (hidden, pessimistic): grades the teacher's words against the rubric and the
+   notes. It returns credited items, each with a verbatim evidence quote, plus revoked
+   items, problems, and a note telling Stu what to be confused about. The server drops any
+   credit whose quote doesn't appear in the teacher's messages.
+2. **Stu** (visible): replies in character from the transcript plus that director note.
+   Stu never sees the notes, so he can't leak answers.
 
 Stack: `client/` is Vite + React (state in localStorage); `server/` is Express +
-`@anthropic-ai/sdk` (model `claude-opus-5-5`, structured outputs).
-- `server/prompts.js`: Pip's persona and grading prompts (the core of the product)
-- `server/index.js`: `/api/topics/prepare` and `/api/chat` (mode `teach` | `review`)
+`@anthropic-ai/sdk`.
+- `server/prompts.js`: depth levels, rubric, judge, Stu and review prompts (the core of the product)
+- `server/rubric.js`: item ids and stage logic, shared with the client
+- `server/index.js`: `/api/depths`, `/api/topics/prepare`, `/api/chat` (mode `teach` | `review`)
 - `server/mock.js`: canned responses when `MOCK=1`
-- `client/src/App.jsx`: the whole UI
+- `client/src/App.jsx`: the whole UI ("Show the hidden judge" toggle in the sidebar for debugging)
 
 ## Before you start any work
 1. `git pull --rebase origin main`

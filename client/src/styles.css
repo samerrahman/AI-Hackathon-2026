@@ -9,9 +9,9 @@
   --accent-soft: #ece7ff;
   --user-bubble: #6d4aff;
   --user-text: #ffffff;
-  --pip-bubble: #ffffff;
-  --pip: #ffc94d;
-  --pip-dark: #c9921a;
+  --stu-bubble: #ffffff;
+  --stu: #ffc94d;
+  --stu-dark: #c9921a;
   --good: #1f9d6b;
   --good-soft: #dff5ea;
   --warn: #c2410c;
@@ -30,7 +30,7 @@
     --accent: #9b84ff;
     --accent-soft: #2b2547;
     --user-bubble: #6d4aff;
-    --pip-bubble: #2a2636;
+    --stu-bubble: #2a2636;
     --good: #4ade9c;
     --good-soft: #173528;
     --warn: #fb923c;
@@ -152,13 +152,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .msg { display: flex; gap: 10px; align-items: flex-end; max-width: 720px; }
 .msg.user { align-self: flex-end; }
 .msg.assistant { align-self: flex-start; }
-.pip { flex-shrink: 0; }
+.stu { flex-shrink: 0; }
 .bubble {
   padding: 10px 14px; border-radius: 16px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word;
 }
 .msg.user .bubble { background: var(--user-bubble); color: var(--user-text); border-bottom-right-radius: 4px; }
 .msg.assistant .bubble {
-  background: var(--pip-bubble); border: 1px solid var(--border); border-bottom-left-radius: 4px;
+  background: var(--stu-bubble); border: 1px solid var(--border); border-bottom-left-radius: 4px;
 }
 .learned-tag { font-size: 12px; font-weight: 700; color: var(--good); margin: 4px 0 0 6px; }
 .typing { display: flex; gap: 4px; padding: 14px 16px; }
@@ -204,4 +204,61 @@ button, input, textarea { font: inherit; color: inherit; }
   .new-topic { padding: 56px 16px 24px; }
   .new-hero { flex-direction: column; align-items: flex-start; }
   .error.inline { margin: 0 16px 8px; }
+}
+
+/* Depth picker */
+.depths { border: none; padding: 0; margin: 0; }
+.depths legend { font-weight: 700; margin-bottom: 6px; padding: 0; }
+.depth-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.depth {
+  display: flex; flex-direction: column; gap: 2px; cursor: pointer;
+  background: var(--panel); border: 1.5px solid var(--border); border-radius: 12px; padding: 10px 12px;
+}
+.depth input { position: absolute; opacity: 0; pointer-events: none; }
+.depth.selected { border-color: var(--accent); background: var(--accent-soft); }
+.depth-label { font-weight: 800; }
+.depth-blurb { font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.35; }
+.depth-pill {
+  font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px;
+  background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+}
+
+/* Stages */
+.stages { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.stage {
+  display: flex; align-items: center; gap: 6px; padding: 5px 12px 5px 6px; border-radius: 99px;
+  border: 1.5px solid var(--border); background: transparent; cursor: pointer; font-weight: 700; font-size: 13px;
+  color: var(--muted);
+}
+.stage-num {
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--bg); font-size: 11px;
+}
+.stage-count { font-weight: 600; opacity: 0.8; }
+.stage.current { color: var(--accent); border-color: var(--accent); }
+.stage.current .stage-num { background: var(--accent); color: #fff; }
+.stage.done { color: var(--good); }
+.stage.done .stage-num { background: var(--good); color: #fff; }
+.stage.shown { background: var(--accent-soft); }
+.stage.done.shown { background: var(--good-soft); }
+
+/* Hidden judge (debug view) */
+.judge-toggle {
+  margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted);
+  cursor: pointer; padding: 0 4px;
+}
+.msg.user .bubble-wrap { display: flex; flex-direction: column; align-items: flex-end; }
+.judge {
+  margin-top: 6px; max-width: 520px; background: var(--panel); border: 1px dashed var(--border);
+  border-radius: 10px; padding: 8px 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px;
+}
+.judge-head { font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; color: var(--muted); }
+.judge-none { color: var(--muted); }
+.judge-row.good { color: var(--good); }
+.judge-row.bad { color: var(--warn); }
+.judge-quote { display: block; color: var(--muted); font-style: italic; }
+.toast.bad { background: var(--warn); }
+
+@media (max-width: 760px) {
+  .depth-options { grid-template-columns: 1fr; }
 }

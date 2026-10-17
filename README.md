@@ -15,6 +15,18 @@ npm run dev
 
 `npm ci` installs the exact dependency versions in `package-lock.json`. `npm run dev` starts the API and Vite frontend; open **http://127.0.0.1:5173**. The API listens on loopback port 3001, and Vite forwards `/api` requests to it. Stop both with Ctrl+C.
 
+## Firebase Hosting preview
+
+The dedicated Firebase project is `ai-la-hackathon-2026`. Its Hosting site serves a static preview at **https://brodidnot.study** (also available at `https://ai-la-hackathon-2026.web.app`). The custom domain and Porkbun DNS records are documented in [docs/DOMAIN.md](docs/DOMAIN.md). Build and deploy the site with:
+
+```sh
+npm ci
+npm run build:hosting
+npx firebase-tools deploy --only hosting --project ai-la-hackathon-2026
+```
+
+Hosting serves the Vite `dist/` output. In this preview, visitors can open and read notes in their browser. Interactive study, sample sessions, and voice are unavailable because they use the Express `/api` server, which has not been deployed. The regular `npm run dev` and `npm run build` flows still use that server locally. No Firebase Auth, database, or Storage service is enabled for this preview.
+
 Choose **Try a sample session** to use typed study without credentials. The real-analysis and research-methods samples are original synthetic notes, not a real instructor’s material. A persistent **Sample demo** badge identifies deterministic fixture responses. The sample adapter recognizes a limited set of explanations and leaves unfamiliar wording unassessed; it cannot evaluate arbitrary uploaded documents.
 
 ## Connect StepFun

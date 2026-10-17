@@ -1,0 +1,7 @@
+{
+  "hosting": {
+    "site": "ai-la-hackathon-2026",
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  }
+}

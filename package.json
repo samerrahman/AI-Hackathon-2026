@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
     "build": "tsc --noEmit && vite build",
+    "build:hosting": "tsc --noEmit && vite build --mode hosting",
     "start": "tsx server/index.ts",
     "test": "tsx --test server/*.test.ts src/lib/*.test.ts",
     "check": "tsc --noEmit",

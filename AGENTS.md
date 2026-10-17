@@ -5,7 +5,7 @@ Gemini, Copilot, etc.) work in this repo. Tool-specific files (`CLAUDE.md`,
 `GEMINI.md`, ...) only point here. **Edit this file, not those.**
 
 ## Project
-AI LA Hackathon 2026 project. _TODO: one-paragraph description, stack, how to run._
+DumbAI is an AI LA Hackathon 2026 education MVP: students teach a deliberately naïve AI pupil, while a server-side evaluator probes gaps against a concept rubric. It uses Next.js App Router, strict TypeScript, Tailwind, Zod, Vitest, and StepFun `step-5-preview` through the official OpenAI client. Run `npm install` then `npm run dev`; without a key it uses a complete deterministic demo mode.
 
 ## Before you start any work
 1. `git pull --rebase origin main`
@@ -37,4 +37,4 @@ Any architectural choice (framework, API shape, data model, env var) goes in
 agents learn about it.
 
 ## Commands
-_TODO: install / dev / test / lint commands once the stack exists._
+`npm install` · `npm run dev` · `npm test` · `npm run lint` · `npm run typecheck` · `npm run build`

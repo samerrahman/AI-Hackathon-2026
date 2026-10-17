@@ -1,0 +1,5 @@
+# All four project owners can review changes across the repository.
+* @ruxinsheng @jamlol123 @zenoro0 @samerrahman
+
+# Keep changes to the ownership policy under owner review too.
+/.github/CODEOWNERS @ruxinsheng @jamlol123 @zenoro0 @samerrahman

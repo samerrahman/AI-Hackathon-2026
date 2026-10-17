@@ -1,7 +1,6 @@
 import express from "express";
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { llm, PROVIDER, friendlyError } from "./llm.js";
 import {
   STUDENT_NAME,
   DEPTHS,
@@ -15,12 +14,10 @@ import {
 import { allItems, stageOf } from "./rubric.js";
 import { mockPrepare, mockJudge, mockReply } from "./mock.js";
 
-const MODEL = "claude-opus-5-5";
 // The judge is the part that has to be right, so it thinks harder than Stu does.
 const JUDGE_EFFORT = "medium";
 const STU_EFFORT = "low";
 const MOCK = process.env.MOCK === "1";
-const client = MOCK ? null : new Anthropic();
 
 const RubricSchema = z.object({
   ideas: z.array(z.object({ id: z.string(), name: z.string(), cover: z.string(), explain: z.string() })),
@@ -42,31 +39,6 @@ const VerdictSchema = z.object({
   stuFocus: z.string(),
   stuMistake: z.string(),
 });
-
-// Server-side fallbacks cover the rare safety decline.
-const BASE = { model: MODEL, max_tokens: 16000, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
-
-async function askStructured({ system, messages, schema, effort }) {
-  const response = await client.beta.messages.parse({
-    ...BASE,
-    output_config: { effort, format: betaZodOutputFormat(schema) },
-    system,
-    messages,
-  });
-  if (response.stop_reason === "refusal") throw new Error("The model declined to respond to that message.");
-  if (!response.parsed_output) throw new Error("Model returned unparseable output.");
-  return response.parsed_output;
-}
-
-async function askText({ system, messages, effort }) {
-  const response = await client.beta.messages.create({ ...BASE, output_config: { effort }, system, messages });
-  if (response.stop_reason === "refusal") throw new Error("The model declined to respond to that message.");
-  return response.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-}
 
 function itemName(topic, item) {
   const [kind, id] = item.split(":");
@@ -94,7 +66,15 @@ const transcript = (messages) =>
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
-app.get("/api/health", (_req, res) => res.json({ ok: true, mock: MOCK, student: STUDENT_NAME }));
+app.get("/api/health", (_req, res) => {
+  let model = null;
+  try {
+    model = MOCK ? "mock" : llm().model;
+  } catch {
+    /* missing key; reported when a request is made */
+  }
+  res.json({ ok: true, mock: MOCK, provider: MOCK ? "mock" : PROVIDER, model, student: STUDENT_NAME });
+});
 
 app.get("/api/depths", (_req, res) =>
   res.json(Object.entries(DEPTHS).map(([key, d]) => ({ key, label: d.label, blurb: d.blurb })))
@@ -108,7 +88,7 @@ app.post("/api/topics/prepare", async (req, res, next) => {
       return res.status(400).json({ error: "Title and notes are required." });
     }
     if (MOCK) return res.json(mockPrepare(title));
-    const out = await askStructured({
+    const out = await llm().structured({
       system: prepareSystem(depthOf(depthKey)),
       messages: [{ role: "user", content: `Topic: ${title}\n\nCourse notes:\n${notes}` }],
       schema: RubricSchema,
@@ -140,14 +120,14 @@ app.post("/api/chat", async (req, res, next) => {
     if (mode === "review") {
       const reply = MOCK
         ? mockReply(chat, "review")
-        : await askText({ system: reviewSystem(topic, depth), messages: chat, effort: STU_EFFORT });
+        : await llm().text({ system: reviewSystem(topic, depth), messages: chat, effort: STU_EFFORT });
       return res.json({ reply, credited: [], revoked: [], problems: [] });
     }
 
     // 1. Judge
     const raw = MOCK
       ? mockJudge(topic, chat)
-      : await askStructured({
+      : await llm().structured({
           system: judgeSystem(topic, depth),
           messages: [{ role: "user", content: `Conversation so far:\n\n${transcript(chat)}` }],
           schema: VerdictSchema,
@@ -187,9 +167,10 @@ app.post("/api/chat", async (req, res, next) => {
     };
     const reply = MOCK
       ? mockReply(chat, "teach", verdict)
-      : await askText({
+      : await llm().text({
           system: stuSystem(topic),
-          messages: [...chat, { role: "system", content: stuDirection(verdict, stage) }],
+          messages: chat,
+          note: stuDirection(verdict, stage),
           effort: STU_EFFORT,
         });
 
@@ -201,14 +182,8 @@ app.post("/api/chat", async (req, res, next) => {
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  let message = err.message || "Something went wrong.";
-  if (err instanceof Anthropic.AuthenticationError) {
-    message = "No valid Anthropic API key. Add ANTHROPIC_API_KEY to .env, or set MOCK=1.";
-  } else if (err instanceof Anthropic.RateLimitError) {
-    message = "Rate limited by the Anthropic API. Try again in a moment.";
-  }
-  res.status(err.status && err.status < 600 ? err.status : 500).json({ error: message });
+  res.status(err.status >= 400 && err.status < 600 ? err.status : 500).json({ error: friendlyError(err) });
 });
 
 const PORT = process.env.API_PORT || 3001;
-app.listen(PORT, () => console.log(`server on :${PORT}${MOCK ? " (MOCK mode)" : ""}`));
+app.listen(PORT, () => console.log(`server on :${PORT} using ${MOCK ? "MOCK mode" : PROVIDER}`));

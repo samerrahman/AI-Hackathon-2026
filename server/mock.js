@@ -39,6 +39,6 @@ const confused = [
 
 export function mockReply(chat, mode, verdict) {
   if (mode === "review") return `(mock) Ooh, I remember this stuff! Want me to quiz you?`;
-  if (verdict.creditedNames.length) return `Ohhh! Now I get ${verdict.creditedNames.join(" and ")}! (mock)`;
+  if (verdict.creditedNames.length) return "Ohhh! I think I actually get that part now! (mock)";
   return confused[chat.length % confused.length];
 }

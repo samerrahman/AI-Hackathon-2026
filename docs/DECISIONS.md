@@ -9,3 +9,5 @@ Append-only. Newest at the bottom. Format: `YYYY-MM-DD — decision — why (who
 - 2026-10-17 — Judge credits need a verbatim quote of the teacher's words, checked server-side — keeps the judge pessimistic (samer)
 - 2026-10-17 — Depth (basics/exam/deep) is fixed per topic at creation and shapes both the rubric and the grading; teaching runs in stages cover → explain → connect (samer)
 - 2026-10-17 — Learner renamed from Pip to Stu (samer)
+- 2026-10-17 — Pluggable LLM provider (LLM_PROVIDER=gemini|asi1|anthropic); Gemini and ASI:One via raw fetch — try a free Gemini key and Fetch.ai's ASI:One alongside Claude (samer)
+- 2026-10-17 — UI shows only an overall progress bar; stage/item progress stays hidden from the user (samer)

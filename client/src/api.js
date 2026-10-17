@@ -11,6 +11,8 @@ async function request(path, body) {
 
 export const getDepths = () => request("/api/depths");
 
+export const getHealth = () => request("/api/health");
+
 export const prepareTopic = (title, notes, depth) => request("/api/topics/prepare", { title, notes, depth });
 
 export const sendChat = (topic, messages, mode) =>

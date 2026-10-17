@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { getDepths, prepareTopic, sendChat } from "./api.js";
+import { getDepths, getHealth, prepareTopic, sendChat } from "./api.js";
 import { allItems, stageOf } from "../../server/rubric.js";
 
 const STORAGE_KEY = "teach-stu-topics-v2";
 const STU = "Stu";
-
-const STAGES = [
-  { key: "cover", label: "Cover", hint: "Name every idea and its gist" },
-  { key: "explain", label: "Explain", hint: "Explain how each idea works" },
-  { key: "connect", label: "Connect", hint: "Show how the ideas relate" },
-];
 
 const FALLBACK_DEPTHS = [
   { key: "basics", label: "Big picture", blurb: "The main ideas and how they fit, in plain words." },
@@ -31,11 +25,6 @@ const progressOf = (t) => {
   return { done: items.filter((id) => t.credited[id]).length, total: items.length };
 };
 
-function stageItems(topic, stage) {
-  if (stage === "connect") return topic.connections.map((k) => ({ id: `link:${k.id}`, name: k.name }));
-  return topic.ideas.map((i) => ({ id: `${stage}:${i.id}`, name: i.name }));
-}
-
 function greeting(title) {
   return `Hi!! I'm ${STU}. Someone told me I have to learn "${title}" today and honestly I don't even know what the first word means. Can you teach me? Go slow, I'm not very smart.`;
 }
@@ -46,6 +35,11 @@ export default function App() {
   const [creating, setCreating] = useState(topics.length === 0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showJudge, setShowJudge] = useState(false);
+  const [health, setHealth] = useState(null);
+
+  useEffect(() => {
+    getHealth().then(setHealth).catch(() => {});
+  }, []);
 
   useEffect(() => {
     try {
@@ -108,7 +102,7 @@ export default function App() {
               >
                 <span className="topic-title">{t.title}</span>
                 <span className={`topic-badge ${isComplete(t) ? "done" : ""}`}>
-                  {isComplete(t) ? "taught ✓" : `${p.done}/${p.total}`}
+                  {isComplete(t) ? "taught ✓" : `${Math.round((p.done / p.total) * 100)}%`}
                 </span>
               </button>
             );
@@ -118,6 +112,7 @@ export default function App() {
           <input type="checkbox" checked={showJudge} onChange={(e) => setShowJudge(e.target.checked)} />
           Show the hidden judge
         </label>
+        {health && <div className="provider">AI: {health.mock ? "mock mode" : `${health.provider} · ${health.model ?? "no key"}`}</div>}
       </aside>
       {sidebarOpen && <div className="scrim" onClick={() => setSidebarOpen(false)} />}
 
@@ -240,7 +235,6 @@ function Chat({ topic, showJudge, update, onDelete }) {
   const stage = stageOf(topic, topic.credited);
   const complete = stage === "done";
   const mode = complete ? "review" : "teach";
-  const [viewStage, setViewStage] = useState(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -296,7 +290,7 @@ function Chat({ topic, showJudge, update, onDelete }) {
         return updated;
       });
       if (revoked.length) setToast({ kind: "bad", text: `${STU} got confused again about something you'd taught` });
-      else if (credited.length) setToast({ kind: "good", text: `💡 ${STU} got it: ${credited.map((c) => itemLabel(topic, c.item)).join(", ")}` });
+      else if (credited.length) setToast({ kind: "good", text: `💡 ${STU} learned something!` });
     } catch (err) {
       setError(err.message);
       update((t) => ({ ...t, [logKey]: history.slice(0, -1) }));
@@ -308,8 +302,6 @@ function Chat({ topic, showJudge, update, onDelete }) {
 
   const { done, total } = progressOf(topic);
   const pct = Math.round((done / total) * 100);
-  const shownStage = viewStage ?? (complete ? "connect" : stage);
-  const currentIdx = STAGES.findIndex((s) => s.key === stage);
 
   return (
     <div className="chat">
@@ -328,35 +320,6 @@ function Chat({ topic, showJudge, update, onDelete }) {
           </div>
           <span className="pct">{pct}% taught</span>
         </div>
-        <div className="stages">
-          {STAGES.map((s, i) => {
-            const items = stageItems(topic, s.key);
-            const n = items.filter((it) => topic.credited[it.id]).length;
-            const state = complete || i < currentIdx ? "done" : i === currentIdx ? "current" : "later";
-            return (
-              <button
-                key={s.key}
-                className={`stage ${state} ${shownStage === s.key ? "shown" : ""}`}
-                onClick={() => setViewStage(s.key)}
-                title={s.hint}
-              >
-                <span className="stage-num">{state === "done" ? "✓" : i + 1}</span>
-                {s.label}
-                <span className="stage-count">
-                  {n}/{items.length}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <ul className="concepts">
-          {stageItems(topic, shownStage).map((it) => (
-            <li key={it.id} className={topic.credited[it.id] ? "done" : ""}>
-              <span className="check">{topic.credited[it.id] ? "✓" : ""}</span>
-              {it.name}
-            </li>
-          ))}
-        </ul>
       </header>
 
       <div className="messages">

@@ -1,0 +1,13 @@
+{
+  "name": "server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=../.env index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "express": "^5.1.0",
+    "zod": "^4.0.0"
+  }
+}

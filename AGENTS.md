@@ -5,7 +5,19 @@ Gemini, Copilot, etc.) work in this repo. Tool-specific files (`CLAUDE.md`,
 `GEMINI.md`, ...) only point here. **Edit this file, not those.**
 
 ## Project
-AI LA Hackathon 2026 project. _TODO: one-paragraph description, stack, how to run._
+**Teach Pip**: a learn-by-teaching app. The user pastes course notes for a topic,
+and Claude extracts a checklist of concepts. The user then has to teach each one to
+"Pip", a deliberately dim AI learner that takes things literally, makes mistakes, and asks
+clarifying questions. Pip marks a concept learned only after a specific, correct
+explanation. Once every concept is taught, the same chat switches to **re-learn mode**,
+where Pip explains the topic back and quizzes the user.
+
+Stack: `client/` is Vite + React (state in localStorage); `server/` is Express +
+`@anthropic-ai/sdk` (model `claude-opus-5-5`, structured outputs).
+- `server/prompts.js`: Pip's persona and grading prompts (the core of the product)
+- `server/index.js`: `/api/topics/prepare` and `/api/chat` (mode `teach` | `review`)
+- `server/mock.js`: canned responses when `MOCK=1`
+- `client/src/App.jsx`: the whole UI
 
 ## Before you start any work
 1. `git pull --rebase origin main`
@@ -37,4 +49,8 @@ Any architectural choice (framework, API shape, data model, env var) goes in
 agents learn about it.
 
 ## Commands
-_TODO: install / dev / test / lint commands once the stack exists._
+```bash
+cp .env.example .env   # add ANTHROPIC_API_KEY, or set MOCK=1 to work without one
+npm install
+npm run dev            # client on :5173, API on :3001 (API_PORT)
+```

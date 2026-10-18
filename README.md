@@ -6,17 +6,17 @@ Teach Stu preserves the React study workspace, PDF viewer, source navigation, lo
 
 ## How Teach Stu uses Step 5 Preview
 
-Every live topic calls StepFun's **`step-5-preview`**: once to build the private rubric from your notes, then on every message you send, before Stu is allowed to reply. If that call fails, Stu does not answer and your draft stays in the box for a retry.
+Every live topic calls StepFun's **`step-5-preview`**: once to build the private rubric, then to grade every message you send. Grading runs **in the background**: Stu answers first (in about 10 seconds), and while you read his reply and type your next explanation, Step 5 Preview checks what you said and updates the progress bar (typically 20–40 seconds). If you send your next message before grading finishes, it waits for that grading first, so nothing is graded out of order. If grading fails, the message stays queued and is graded together with your next one.
 
 | Step | Model | What it does | What it sees |
 | --- | --- | --- | --- |
-| Rubric | `step-5-preview` | Turns your notes into hidden *cover → explain → connect* requirements at the depth you chose | Your notes, title, depth |
-| Judge (every turn) | `step-5-preview` | Pessimistically grades your latest message; every credit must quote your exact words, which the server re-checks | Relevant notes, rubric, conversation |
-| Stu (every turn) | `step-3.7-flash` | The visible, deliberately dim student: one short question, sometimes a planted mix-up for you to catch | Conversation and a sanitized note from the Judge, never the notes or rubric |
-| Re-learn | `step-5-preview` → `step-3.7-flash` | After you finish, the Judge writes a source-grounded recap and quiz; Stu delivers it | Verified teacher quotes, notes |
+| Rubric | `step-5-preview` | Turns your notes (or just the title and depth) into hidden *cover → explain → connect* requirements | Your notes, title, depth |
+| Stu (every message) | `step-3.7-flash` | The visible, deliberately dim student: reacts in his own words, sometimes states a planted mix-up for you to catch, and asks one question | The visible chat and, from the last grading, one phrase of yours to ask about. Never the notes or rubric |
+| Judge (every message, in the background) | `step-5-preview` | Pessimistically grades your messages: credits must quote your exact words (the server re-checks every quote), contradictions revoke credit, and problems are recorded | Relevant notes, rubric, conversation |
+| Re-learn | `step-5-preview` → `step-3.7-flash` | When everything is credited, Step 5 writes a checked recap and quiz from your verified wording; Stu teaches it back, then grades each quiz answer the same way | Verified teacher quotes, notes |
 | Voice (optional) | `stepaudio-3-asr-max`, `stepaudio-3-tts` | Transcribes your spoken explanation for you to review before sending; reads Stu's replies aloud | Your recording; Stu's reply text |
 
-The Judge runs on Step 5 Preview because grading is the part that has to be right. Stu runs on a faster model so replies come back quickly, and he can't leak answers he was never given. You stay in control: you pick the depth, review every transcript before it's sent, can pause, end, or delete a session, and the **Step 5 Preview · Live** badge only appears after a turn whose Judge actually used `step-5-preview`. Sample sessions are labeled **Sample demo** and use fixed responses instead of a model.
+Why this shape: StepFun's models think before they answer. Asking Step 5 Preview to grade *and* plan Stu's reply on every message took over 100 seconds and blocked the chat, so the Judge now only grades (credits, revocations, problems), Stu replies on the faster model without waiting, and every request is streamed so long generations keep their connection alive. You stay in control: you pick the depth, review every transcript before it's sent, can pause, end, or delete a session, and the **Step 5 Preview · Live** badge only appears after a grading that actually used `step-5-preview`. Sample sessions are labeled **Sample demo** and use fixed responses instead of a model.
 
 ## Run locally
 

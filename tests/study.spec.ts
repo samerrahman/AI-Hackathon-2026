@@ -60,20 +60,30 @@ test('mocked live dual-model turn shows honest status, one bar, debug evidence, 
     topicId: 'mock-topic', stateToken: 'opaque-encrypted-state-token', progress: { total: 8, credited: 0, percent: 0, mode: 'teach' },
     message: { id: 'welcome', role: 'assistant', text: 'Hi! Teach me this topic. What should I know first?' }, liveStep5: false,
   } }));
-  let calls = 0;
+  // Stu replies first (/api/teach); the Step 5 Judge grades in the background (/api/judge).
+  let replies = 0; let gradings = 0; let lastText = ''; let lastMessageId = '';
   await page.route('**/api/teach', async route => {
-    calls++;
+    replies++;
+    ({ text: lastText, messageId: lastMessageId } = route.request().postDataJSON());
+    await route.fulfill({ json: {
+      topicId: 'mock-topic', stateToken: `opaque-state-reply-${replies}`, progress: replies === 1 ? { total: 8, credited: 0, percent: 0, mode: 'teach' } : { total: 8, credited: 2, percent: 25, mode: 'teach' },
+      message: { id: `stu-${replies}`, role: 'assistant', text: replies === 1 ? 'Wait, why does opening the switch stop the lamp?' : 'So another branch is like a second road?' },
+      judgePending: true, liveStep5: false,
+    } });
+  });
+  await page.route('**/api/judge', async route => {
+    gradings++;
     const request = route.request().postDataJSON();
     const sourceId = request.documents[0].spans[0].id;
-    await route.fulfill({ json: {
-      topicId: 'mock-topic', stateToken: `opaque-state-after-${calls}`, progress: calls === 1 ? { total: 8, credited: 2, percent: 25, mode: 'teach' } : { total: 8, credited: 8, percent: 100, mode: 'relearn' },
-      message: calls === 1 ? { id: 'stu-1', role: 'assistant', text: 'Wait, why does opening the switch stop the lamp?' }
-        : { id: 'stu-2', role: 'assistant', text: 'You taught me that the path must be closed. An open switch breaks it. What happens if there is another branch?', sourceIds: [sourceId] },
-      transition: calls > 1, liveStep5: true,
-      debug: { credits: [{ itemId: 'opaque-item-1', quote: request.text }], revocations: [], problems: [],
-        focus: { type: 'vague', anchorQuote: request.text, instruction: 'ask_clarify' }, mistakeAccepted: false,
-        models: { judge: 'step-5-preview', stu: 'step-3.7-flash' }, durationMs: { judge: 12, stu: 4 } },
-    } });
+    const debug = { credits: [{ itemId: 'opaque-item-1', quote: lastText }], revocations: [], problems: [],
+      focus: { type: 'vague', anchorQuote: lastText, instruction: 'ask_clarify' }, mistakeAccepted: false,
+      models: { judge: 'step-5-preview', stu: 'step-3.7-flash' }, durationMs: { judge: 12, stu: 0 } };
+    if (gradings === 1) return route.fulfill({ json: { topicId: 'mock-topic', stateToken: 'opaque-state-graded-1', progress: { total: 8, credited: 2, percent: 25, mode: 'teach' },
+      judgedMessageIds: [lastMessageId], liveStep5: true, debug } });
+    if (gradings === 2) return route.fulfill({ json: { topicId: 'mock-topic', stateToken: 'opaque-state-graded-2', progress: { total: 8, credited: 8, percent: 100, mode: 'relearn' },
+      judgedMessageIds: [], transition: true, next: 'brief', liveStep5: true } });
+    return route.fulfill({ json: { topicId: 'mock-topic', stateToken: 'opaque-state-teach-back', progress: { total: 8, credited: 8, percent: 100, mode: 'relearn' }, transition: true, liveStep5: true,
+      message: { id: 'stu-teach-back', role: 'assistant', text: 'You taught me that the path must be closed. An open switch breaks it. What happens if there is another branch?', sourceIds: [sourceId] } } });
   });
   await pasteTopic(page);
   await expect(page.getByText('Step 5 Preview · Live')).toHaveCount(0);

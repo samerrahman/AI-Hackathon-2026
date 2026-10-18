@@ -14,15 +14,18 @@ type Mode = 'teach' | 'relearn';
 type Screen = 'welcome' | 'study' | 'recap';
 type Progress = { total: number; credited: number; percent: number; mode: Mode };
 type DebugEvidence = { credits: { itemId: string; quote: string }[]; revocations: { itemId: string; quote: string }[];
-  problems: { type: string; description: string }[]; focus: { type: string; anchorQuote: string; instruction: string };
+  problems: { type: string; description: string }[]; focus?: { type: string; anchorQuote: string; instruction: string };
   mistakeAccepted: boolean; models: { judge: string; stu: string }; durationMs: { judge: number; stu: number } };
 type Message = { id: string; role: 'user' | 'assistant'; text: string; sourceIds?: string[]; debug?: DebugEvidence };
-type TopicResponse = { topicId: string; stateToken: string; progress: Progress; message?: Message; transition?: boolean; liveStep5: boolean; debug?: DebugEvidence };
+type TopicResponse = { topicId: string; stateToken: string; progress: Progress; message?: Message; transition?: boolean; liveStep5: boolean; debug?: DebugEvidence;
+  judgePending?: boolean; judgedMessageIds?: string[]; next?: 'brief' };
 type SavedSession = { id: string; name: string; depth: Depth; mode: 'live' | 'demo'; sampleId?: 'analysis' | 'research';
   documents: StudyDocument[]; stateToken: string; history: Message[]; progress: Progress; liveStep5: boolean;
   documentId: string; pageIndex: number; draft: string; audioOutput: boolean; status: 'active' | 'paused' | 'completed'; updatedAt: number;
   /** Stu's reaction to the last teaching turn, derived only from the overall progress change. */
-  mood?: CharacterState };
+  mood?: CharacterState;
+  /** Stu has answered but the Step 5 Judge has not graded the latest explanation yet. */
+  judgePending?: boolean };
 type FileRow = { id: string; file?: File; title: string; text?: string; size: number; state: string };
 const uid = () => crypto.randomUUID();
 const depthNames: Record<Depth, string> = { 'big-picture': 'Big picture', 'exam-ready': 'Exam ready', expert: 'Expert' };
@@ -55,9 +58,8 @@ function JudgePanel({ debug }: { debug: DebugEvidence }) {
     {debug.credits.map((credit, index) => <p key={`credit-${index}`}><strong>Credited {credit.itemId}</strong> · “{credit.quote}”</p>)}
     {debug.revocations.map((revoke, index) => <p key={`revoke-${index}`}><strong>Revoked {revoke.itemId}</strong> · “{revoke.quote}”</p>)}
     {debug.problems.map((problem, index) => <p key={`problem-${index}`}><strong>{problem.type}</strong> · {problem.description}</p>)}
-    <p>Focus: {debug.focus.instruction} · “{debug.focus.anchorQuote}”</p>
-    <p>Proposed mistake: {debug.mistakeAccepted ? 'accepted' : 'rejected or absent'}</p>
-    <small>Judge {debug.models.judge} · {debug.durationMs.judge} ms / Stu {debug.models.stu} · {debug.durationMs.stu} ms</small>
+    {debug.focus && <p>Next question for Stu: {debug.focus.instruction} · “{debug.focus.anchorQuote}”</p>}
+    <small>Judge {debug.models.judge} · {debug.durationMs.judge} ms</small>
   </details>;
 }
 export default function App() {
@@ -70,6 +72,11 @@ export default function App() {
   const [depth, setDepth] = useState<Depth>('big-picture');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Background grading by the Step 5 Judge, separate from Stu's reply so typing never cancels it.
+  const [judging, setJudging] = useState(false);
+  const [waitingForJudge, setWaitingForJudge] = useState(false);
+  const [judgeError, setJudgeError] = useState('');
+  const judgeRun = useRef<Promise<void> | null>(null);
   const [processing, setProcessing] = useState('');
   const [modal, setModal] = useState<'sample' | 'paste' | 'settings' | 'how' | 'delete' | 'expressions' | null>(null);
   const [expression, setExpression] = useState<CharacterState>('neutral');
@@ -161,30 +168,62 @@ export default function App() {
   }
   async function teach() {
     if (hostingPreview) return;
+    if (!sessionRef.current?.draft.trim()) return;
+    // The next reply must build on the latest grading, so let a running grading land first.
+    if (judgeRun.current) { setWaitingForJudge(true); await judgeRun.current; setWaitingForJudge(false); }
     const current = sessionRef.current; if (!current?.draft.trim()) return;
     voice.cancelRecording(); voice.stopPlayback(); const ticket = gate.current.begin(); const turnId = uid(); const messageId = uid(); setBusy(true); setError('');
     try {
       const result = await api<TopicResponse>('/api/teach', { topicId: current.id, stateToken: current.stateToken, documents: plainDocs(current.documents), turnId, messageId, revision: ticket.revision, text: current.draft.trim() }, ticket.signal);
       if (!gate.current.current(ticket.revision) || sessionRef.current?.id !== current.id || result.topicId !== current.id) return;
-      const teacher: Message = { id: messageId, role: 'user', text: current.draft.trim(), ...(config.judgeDebugAvailable && result.debug ? { debug: result.debug } : {}) };
-      // Stu's face reacts to the overall bar only, so it never hints at which idea was credited.
-      const mood: CharacterState = result.progress.credited > current.progress.credited ? 'pleased' : result.progress.credited < current.progress.credited || result.progress.mode === 'teach' ? 'puzzled' : 'neutral';
-      const next: SavedSession = { ...sessionRef.current, stateToken: result.stateToken, progress: result.progress, liveStep5: current.mode === 'live' && result.liveStep5, mood,
-        history: [...current.history, teacher, ...(result.message ? [result.message] : [])], draft: '', updatedAt: Date.now() };
+      const teacher: Message = { id: messageId, role: 'user', text: current.draft.trim() };
+      const next: SavedSession = { ...sessionRef.current, stateToken: result.stateToken, progress: result.progress, liveStep5: current.liveStep5 || (current.mode === 'live' && result.liveStep5),
+        judgePending: Boolean(result.judgePending), history: [...current.history, teacher, ...(result.message ? [result.message] : [])], draft: '', updatedAt: Date.now() };
       setSession(next); sessionRef.current = next;
       if (next.audioOutput && config.voiceAvailable && result.message) void voice.speak(result.message.text);
-    } catch (cause) { if (gate.current.current(ticket.revision)) { patch({ liveStep5: false }); setError(cause instanceof Error ? cause.message : 'The connection was interrupted. Your draft is safe.'); } }
+      if (result.judgePending) void runJudge();
+    } catch (cause) { if (gate.current.current(ticket.revision)) setError(cause instanceof Error ? cause.message : 'The connection was interrupted. Your draft is safe.'); }
     finally { if (gate.current.current(ticket.revision)) setBusy(false); }
   }
+  /** Step 5 Judge grades what Stu already answered; on completion a second call brings Stu's teach-back. */
+  function runJudge(): Promise<void> {
+    if (judgeRun.current) return judgeRun.current;
+    const run = (async () => {
+      setJudging(true); setJudgeError('');
+      try {
+        for (let step = 0; step < 2; step++) {
+          const before = sessionRef.current; if (!before) return;
+          const result = await api<TopicResponse>('/api/judge', { topicId: before.id, stateToken: before.stateToken, documents: plainDocs(before.documents) });
+          const latest = sessionRef.current;
+          // Replies wait for grading, so the token only changes if the user left or started another topic.
+          if (!latest || latest.id !== before.id || latest.stateToken !== before.stateToken) return;
+          // Stu's face reacts to the overall bar only, so it never hints at which idea was credited.
+          const mood: CharacterState = result.progress.credited > latest.progress.credited ? 'pleased' : result.progress.mode === 'teach' ? 'puzzled' : latest.mood ?? 'neutral';
+          const judged = new Set(result.judgedMessageIds ?? []);
+          const history = latest.history.map(message => config.judgeDebugAvailable && result.debug && judged.has(message.id) ? { ...message, debug: result.debug } : message);
+          const next: SavedSession = { ...latest, stateToken: result.stateToken, progress: result.progress, mood, judgePending: result.next === 'brief',
+            liveStep5: latest.liveStep5 || (latest.mode === 'live' && result.liveStep5), history: result.message ? [...history, result.message] : history, updatedAt: Date.now() };
+          setSession(next); sessionRef.current = next;
+          if (result.message && next.audioOutput && config.voiceAvailable) void voice.speak(result.message.text);
+          if (result.next !== 'brief') return;
+        }
+      } catch (cause) {
+        // Nothing is lost: the server keeps the message queued and grades it with the next one.
+        setJudgeError(cause instanceof Error ? cause.message : 'Stu could not check that explanation yet.');
+      } finally { setJudging(false); judgeRun.current = null; }
+    })();
+    judgeRun.current = run;
+    return run;
+  }
   function pause() { interrupt(); patch({ status: 'paused' }); setScreen('welcome'); setError(''); }
-  function resume() { if (!saved) return; interrupt(); setSession(saved); sessionRef.current = saved; setScreen('study'); setTab(hostingPreview ? 'notes' : 'conversation'); setError(''); }
+  function resume() { if (!saved) return; interrupt(); setSession(saved); sessionRef.current = saved; setScreen('study'); setTab(hostingPreview ? 'notes' : 'conversation'); setError(''); if (saved.judgePending && !hostingPreview) void runJudge(); }
   async function erase() { const id = sessionRef.current?.id ?? saved?.id; if (id && !hostingPreview) void fetch(`/api/session/${id}`, { method: 'DELETE' }).catch(() => {}); interrupt(); setSession(null); sessionRef.current = null; setSaved(null); await saveQueue.current; await deleteSession(); setRows([]); setScreen('welcome'); setModal(null); setError(''); }
   const inWorkspace = screen === 'study';
   const relearn = session?.progress.mode === 'relearn';
   const latest = session?.history.filter(message => message.role === 'assistant').at(-1);
   const modeLabel = relearn ? 'Re-learn' : 'Teaching';
-  const stuState: CharacterState = voice.recording ? 'listening' : voice.speaking ? 'speaking' : busy || voice.transcribing ? 'thinking' : session?.mood ?? 'neutral';
-  const stuCaption = voice.recording ? 'Stu is listening…' : voice.transcribing ? 'Transcribing your explanation…' : voice.speaking ? 'Speaking · AI-generated voice' : busy ? 'Stu is thinking…'
+  const stuState: CharacterState = voice.recording ? 'listening' : voice.speaking ? 'speaking' : busy || waitingForJudge || voice.transcribing ? 'thinking' : session?.mood ?? 'neutral';
+  const stuCaption = voice.recording ? 'Stu is listening…' : voice.transcribing ? 'Transcribing your explanation…' : voice.speaking ? 'Speaking · AI-generated voice' : waitingForJudge ? 'Still thinking about your last explanation…' : busy ? 'Stu is thinking…'
     : (session?.mood && moodCaptions[session.mood]) || (relearn ? 'Your turn to be the student.' : 'Earnest. A little confused.');
   useEffect(() => { const element = thread.current; if (element) element.scrollTop = element.scrollHeight; }, [session?.history.length, busy, tab, inWorkspace]);
   return <div className={`app ${inWorkspace ? 'workspace-app' : ''}`}>
@@ -211,7 +250,7 @@ export default function App() {
 
     {inWorkspace && session && <><div className="session-chrome">
       <nav className="session-tabs" aria-label="Session navigation">{!hostingPreview && <button className={tab === 'conversation' ? 'active' : ''} onClick={() => setTab('conversation')}><MessageCircle size={16} />Teach Stu</button>}{session.documents.length > 0 && <button className={tab === 'notes' ? 'active' : ''} onClick={() => setTab('notes')}><BookOpen size={16} />Notes</button>}<button className="session-tab-end" onClick={() => setSidebar(!sidebar)} aria-expanded={sidebar}><Menu size={16} />Topic</button></nav>
-      {!hostingPreview && <div className="top-progress"><div><span>{relearn ? 'RE-LEARN MODE' : 'TEACHING PROGRESS'}</span><strong>{depthNames[session.depth]} · {session.progress.percent}% taught</strong></div><progress aria-label="Overall topic progress" value={session.progress.credited} max={session.progress.total || 1} /></div>}
+      {!hostingPreview && <div className="top-progress"><div><span>{relearn ? 'RE-LEARN MODE' : 'TEACHING PROGRESS'}</span><strong>{depthNames[session.depth]} · {session.progress.percent}% taught{judging ? ' · checking your explanation…' : ''}</strong></div><progress aria-label="Overall topic progress" value={session.progress.credited} max={session.progress.total || 1} />{judgeError && !judging && <p className="judge-retry" role="status">Couldn’t check your last explanation yet ({judgeError}) It will be checked with your next message. <button className="text-button" onClick={() => void runJudge()}>Check now</button></p>}</div>}
     </div>
       {relearn && <div className="transition-note" role="status">You taught Stu the whole topic. Now he’ll teach it back.</div>}
       <div className={`workspace focused-workspace ${sidebar ? 'sidebar-open' : ''}`}>
@@ -222,7 +261,7 @@ export default function App() {
           : <main className="teaching-chat" aria-label="Teach Stu conversation">
             <div className="chat-header"><div className="chat-stu"><Miso size={78} state={stuState} /><div><span className="eyebrow"><span className="online-dot" /> {relearn ? 'STU TEACHES BACK' : 'YOU’RE TEACHING STU'}</span><strong>{session.name}</strong><small className="character-state">{stuCaption}</small></div></div><button className="icon-button" aria-label={session.audioOutput ? 'Mute spoken responses' : 'Enable spoken responses'} onClick={() => { voice.stopPlayback(); if (!config.voiceAvailable) { setError('Spoken responses are unavailable right now. Typing is fully available.'); return; } patch({ audioOutput: !session.audioOutput }); }}>{session.audioOutput ? <Volume2 size={17} /> : <VolumeX size={17} />}</button></div>
             <div className="chat-thread" ref={thread} aria-live="polite">{session.history.map(message => <div className={`message-row ${message.role === 'user' ? 'student-message' : 'stu-message'}`} key={message.id}>{message.role === 'assistant' && <Miso size={42} interactive={false} state={message.id === latest?.id ? stuState : 'neutral'} />}<div className="message-wrap"><span>{message.role === 'user' ? 'You' : 'Stu'}</span><div className="message-bubble"><RichText text={message.text} /></div>{relearn && message.role === 'assistant' && message.sourceIds?.length ? citations(message.sourceIds) : null}{showJudgeEvidence && message.role === 'user' && message.debug && <JudgePanel debug={message.debug} />}</div></div>)}
-              {busy && <div className="message-row stu-message pending-message"><Miso size={42} interactive={false} state="thinking" /><div className="message-wrap"><span>Stu</span><div className="message-bubble" aria-label="Stu is thinking"><i /><i /><i /></div></div></div>}</div>
+              {(busy || waitingForJudge) && <div className="message-row stu-message pending-message"><Miso size={42} interactive={false} state="thinking" /><div className="message-wrap"><span>Stu</span><div className="message-bubble" aria-label="Stu is thinking"><i /><i /><i /></div></div></div>}</div>
             {session.mode === 'live' && !config.liveAvailable && <p className="inline-notice">Live study needs a server-side StepFun key. Your notes remain available.</p>}
             <div className="response-area chat-composer">
               {voice.recording ? <div className="recording-controls"><span className="recording-label"><span />Listening… {Math.floor(voice.recordingSeconds / 60)}:{String(voice.recordingSeconds % 60).padStart(2, '0')} / 3:00</span><button className="primary" onClick={() => void voice.stopRecording()}><Square size={14} />I’m done</button><button className="text-button" onClick={voice.cancelRecording}>Cancel</button></div> : <button className="primary mic-button" disabled={busy || voice.transcribing || voice.requestingPermission} onClick={() => { setError(''); void voice.startRecording(); }}><Mic size={18} />Start explaining<span>↗</span></button>}

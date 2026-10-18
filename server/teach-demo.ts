@@ -1,6 +1,6 @@
 import type { SourceSpan } from '../shared/types.js';
-import type { TeachProvider, JudgeInput, StuInput, ModelResult } from './teach-provider.js';
-import type { JudgeResult, RubricDraft, StuResult } from './teach-schema.js';
+import type { TeachProvider, JudgeInput, BriefInput, StuInput, ModelResult } from './teach-provider.js';
+import type { JudgeResult, RelearnBrief, RubricDraft, StuResult } from './teach-schema.js';
 
 const ideas = {
   analysis: [
@@ -37,23 +37,30 @@ export class DemoTeachProvider implements TeachProvider {
     return sampleResult({ coreIdeas, items });
   }
   async judge(input: JudgeInput): Promise<ModelResult<JudgeResult>> {
-    const message = input.transcript.at(-1)!;
-    const text = message.text.toLowerCase();
-    const rubric = input.rubric as { id: string; stage: string; requirement: string; sourceIds: string[] }[];
-    const credits = rubric.filter(item => {
-      const topic = ideas[this.sampleId].some(idea => item.requirement.toLowerCase().includes(idea[1]) && text.includes(idea[0]));
-      return topic && text.split(/\s+/).length >= 8 && !/^(yes|exactly|that's right)/i.test(text);
-    }).map(item => ({ rubricItemId: item.id, teacherMessageId: message.id, quote: message.text.slice(0, 1200) }));
-    const already = input.credits as Record<string, { quote: string }>;
-    const complete = new Set([...Object.keys(already), ...credits.map(c => c.rubricItemId)]).size === rubric.length;
-    const firstQuote = Object.values(already)[0]?.quote ?? credits[0]?.quote ?? '';
-    const brief = complete ? { teacherQuote: firstQuote, accurateSummary: `You explained ${ideas[this.sampleId].map(i => i[1]).join(', ')} in your own words.`, correction: '', quizFeedback: '', quizQuestion: `How would you apply ${ideas[this.sampleId][0][1]} to a new example?`, sourceIds: [input.sources[0].id] } : null;
-    return sampleResult({ credits, revocations: [], problems: [], focus: { type: 'vague', teacherMessageId: message.id, anchorQuote: message.text.slice(0, 160), instruction: 'ask_clarify' }, mistake: null, allSatisfied: complete, relearnBrief: brief });
+    // Grade each pending teacher message (the transcript also holds Stu's replies).
+    const pending = new Set(input.pendingTeacherMessageIds);
+    const credits = input.transcript.filter(message => message.role === 'user' && pending.has(message.id)).flatMap(message => {
+      const text = message.text.toLowerCase();
+      if (text.split(/\s+/).length < 8 || /^(yes|exactly|that's right)/i.test(text)) return [];
+      return input.rubric.filter(item => !input.creditedItemIds.includes(item.id)
+        && ideas[this.sampleId].some(idea => item.requirement.toLowerCase().includes(idea[1]) && text.includes(idea[0])))
+        .map(item => ({ rubricItemId: item.id, teacherMessageId: message.id, quote: message.text.slice(0, 1200) }));
+    });
+    const seen = new Set<string>();
+    return sampleResult({ credits: credits.filter(credit => !seen.has(credit.rubricItemId) && Boolean(seen.add(credit.rubricItemId))), revocations: [], problems: [] });
+  }
+  async brief(input: BriefInput): Promise<ModelResult<RelearnBrief>> {
+    const names = ideas[this.sampleId].map(idea => idea[1]);
+    return sampleResult({ teacherQuote: input.verifiedTeacherQuotes[0] ?? '', accurateSummary: `You explained ${names.join(', ')} in your own words.`,
+      correction: input.pastProblems.some(problem => problem.type === 'wrong') ? 'One earlier claim needed correcting; the notes show the accurate version.' : '',
+      quizFeedback: input.transition ? '' : 'Thanks, that answer uses the key idea.', quizQuestion: `How would you apply ${names[0]} to a new example?`,
+      sourceIds: input.sources.length ? [input.sources[0].id] : [] });
   }
   async stu(input: StuInput): Promise<ModelResult<StuResult>> {
     const styles = ['literal', 'example', 'causal', 'contrast'] as const;
-    const index = input.transcript.filter(m => m.role === 'user').length % styles.length;
-    const questionStyle = styles[index];
+    // Rotate by the whole transcript and never repeat the previous style (the teach-back follows a reply directly).
+    const index = input.transcript.length % styles.length;
+    const questionStyle = styles[index] === input.lastQuestionStyle ? styles[(index + 1) % styles.length] : styles[index];
     if (input.mode === 'relearn') {
       const brief = (input.director as { brief: { teacherQuote: string; accurateSummary: string; quizQuestion: string } }).brief;
       return sampleResult({ text: `You taught me using “${clip(brief.teacherQuote, 70)}”. ${brief.accurateSummary} ${brief.quizQuestion}`, questionStyle });

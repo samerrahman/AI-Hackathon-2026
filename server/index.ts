@@ -8,8 +8,8 @@ import { ApiError, LIMITS, conceptRequestSchema, turnRequestSchema } from './sch
 import { createConcepts, RevisionGate, runTurn } from './engine.js';
 import { DemoProvider } from './demo.js';
 import { StepFunProvider } from './provider.js';
-import { createTopicSchema, teachTurnSchema } from './teach-schema.js';
-import { createTeachTopic, openTeachState, runTeachTurn } from './teach-engine.js';
+import { createTopicSchema, judgeTurnSchema, teachTurnSchema } from './teach-schema.js';
+import { createTeachTopic, openTeachState, runJudgeTurn, runTeachTurn } from './teach-engine.js';
 import { StepFunTeachProvider } from './teach-provider.js';
 import { DemoTeachProvider } from './teach-demo.js';
 import { synthesize, transcribe, voiceConfiguration } from './voice.js';
@@ -32,14 +32,14 @@ app.use('/api', (req, res, next) => {
 });
 // Bound public, paid model calls even when a browser does not send Origin.
 const windows = new Map<string, { starts: number; count: number }>();
-app.use(['/api/topic', '/api/teach', '/api/concepts', '/api/turn', '/api/transcribe', '/api/speech'], (req, res, next) => {
+app.use(['/api/topic', '/api/teach', '/api/judge', '/api/concepts', '/api/turn', '/api/transcribe', '/api/speech'], (req, res, next) => {
   const now = Date.now();
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   if (windows.size > 10000) for (const [key, value] of windows) if (now - value.starts >= 600000) windows.delete(key);
   const window = windows.get(ip);
   const entry = !window || now - window.starts >= 600000 ? { starts: now, count: 0 } : window;
   windows.set(ip, entry);
-  if (++entry.count > 30) { res.setHeader('Retry-After', String(Math.ceil((entry.starts + 600000 - now) / 1000))); return res.status(429).json({ error: 'Too many study requests. Please try again in a few minutes.', code: 'RATE_LIMIT' }); }
+  if (++entry.count > 60) { res.setHeader('Retry-After', String(Math.ceil((entry.starts + 600000 - now) / 1000))); return res.status(429).json({ error: 'Too many study requests. Please try again in a few minutes.', code: 'RATE_LIMIT' }); }
   next();
 });
 const gate = new RevisionGate();
@@ -64,6 +64,14 @@ app.post('/api/teach', async (req, res) => {
   const teachProvider = state.sample ? new DemoTeachProvider(state.sampleId ?? 'analysis') : new StepFunTeachProvider();
   const result = await runTeachTurn(request, teachProvider, process.env.ENABLE_JUDGE_DEBUG === 'true');
   gate.assertCurrent({ sessionId: request.topicId, turnId: request.turnId, revision: request.revision });
+  if (!res.destroyed) res.json(result);
+});
+// Background grading: the Step 5 Judge grades messages Stu has already answered (and writes the teach-back on completion).
+app.post('/api/judge', async (req, res) => {
+  const request = judgeTurnSchema.parse(req.body);
+  const state = openTeachState(request.stateToken, request.topicId, request.documents);
+  const teachProvider = state.sample ? new DemoTeachProvider(state.sampleId ?? 'analysis') : new StepFunTeachProvider();
+  const result = await runJudgeTurn(request, teachProvider, process.env.ENABLE_JUDGE_DEBUG === 'true');
   if (!res.destroyed) res.json(result);
 });
 app.post('/api/concepts', async (req, res) => {

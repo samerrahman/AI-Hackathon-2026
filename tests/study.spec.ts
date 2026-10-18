@@ -179,3 +179,53 @@ test('“or just start talking” without a title points at the title field, and
   await expect(page.getByRole('alert')).toContainText('StepFun took too long');
   await expect(page.getByRole('alert')).toBeInViewport();
 });
+
+test('a sent explanation shows at once, typing meanwhile never cancels Stu, and unsent words come back', async ({ page }) => {
+  let releaseFirst = () => {};
+  const firstHeld = new Promise<void>(resolve => { releaseFirst = resolve; });
+  let teachCalls = 0;
+  await page.route('**/api/topic', route => route.fulfill({ json: { topicId: 'send-topic', stateToken: 'state-0', progress: { total: 6, credited: 0, percent: 0, mode: 'teach' },
+    message: { id: 'welcome', role: 'assistant', text: 'Hi! Teach me this topic. What should I know first?' }, liveStep5: false } }));
+  await page.route('**/api/teach', async route => {
+    teachCalls++;
+    if (teachCalls === 1) {
+      await firstHeld;
+      return route.fulfill({ json: { topicId: 'send-topic', stateToken: 'state-1', progress: { total: 6, credited: 0, percent: 0, mode: 'teach' },
+        message: { id: 'stu-1', role: 'assistant', text: 'Oh! So what makes the leaf green?' }, liveStep5: true } });
+    }
+    if (teachCalls === 2) return route.fulfill({ status: 502, json: { error: 'Stu returned an incomplete response. Your message is safe; retry.', code: 'INVALID_MODEL_OUTPUT' } });
+    await new Promise(() => {}); // Never answers: the page reloads mid-send.
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', '/stu.svg');
+  expect((await page.request.get('/stu.svg')).ok()).toBe(true);
+  await page.getByRole('textbox', { name: 'Topic title' }).fill('Photosynthesis');
+  await page.getByRole('button', { name: 'or just start talking' }).click();
+  const box = page.getByRole('textbox', { name: 'Your explanation' });
+  const sent = page.locator('.student-message .message-bubble');
+  await box.fill('Plants use light to turn water and carbon dioxide into sugar.');
+  await page.getByRole('button', { name: 'Send explanation' }).click();
+  // On screen as sent, box cleared, Stu thinking, all before the server answers.
+  await expect(sent).toHaveText(['Plants use light to turn water and carbon dioxide into sugar.']);
+  await expect(box).toHaveValue('');
+  await expect(page.getByLabel('Stu is thinking')).toBeVisible();
+  await box.fill('Chlorophyll');
+  releaseFirst();
+  await expect(page.locator('.stu-message:not(.pending-message) .message-bubble').last()).toHaveText('Oh! So what makes the leaf green?');
+  await expect(box).toHaveValue('Chlorophyll');
+  // A failed send takes the bubble back out and returns the words to the box.
+  await box.fill('Chlorophyll absorbs red and blue light.');
+  await page.getByRole('button', { name: 'Send explanation' }).click();
+  await expect(page.getByRole('alert')).toContainText('Stu returned an incomplete response');
+  await expect(box).toHaveValue('Chlorophyll absorbs red and blue light.');
+  await expect(sent).toHaveCount(1);
+  // Reloading mid-send never saves an unconfirmed message; its words wait in the box.
+  await page.getByRole('button', { name: 'Send explanation' }).click();
+  await expect(sent).toHaveCount(2);
+  await expect(page.locator('.save-indicator')).toContainText('Saved on this device');
+  await page.waitForTimeout(300);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Resume session' }).click();
+  await expect(box).toHaveValue('Chlorophyll absorbs red and blue light.');
+  await expect(sent).toHaveCount(1);
+});

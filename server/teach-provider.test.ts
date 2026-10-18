@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SourceSpan } from '../shared/types.js';
-import { StepFunTeachProvider, callTimeoutMs, clampToSchema } from './teach-provider.js';
+import { StepFunTeachProvider, callTimeoutMs, clampToSchema, compactSources } from './teach-provider.js';
 import { ApiError } from './schema.js';
 import { judgeSchema, rubricSchema } from './teach-schema.js';
 import { z } from 'zod';
@@ -64,6 +64,33 @@ test('StepFun wire requests use separate judge and Stu models without sending pr
     if (oldStu === undefined) delete process.env.STEPFUN_STU_MODEL; else process.env.STEPFUN_STU_MODEL = oldStu;
     if (oldModel === undefined) delete process.env.STEPFUN_MODEL; else process.env.STEPFUN_MODEL = oldModel;
   }
+});
+
+test('notes reach Step 5 as short ids with text only, and cited short ids map back to the real ones', async () => {
+  const oldKey = process.env.STEPFUN_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.STEPFUN_API_KEY = 'private-test-key';
+  const boxed: SourceSpan = { ...source, rects: [{ x: 0.1, y: 0.2, width: 0.3, height: 0.05 }], kind: 'paragraph' };
+  const second: SourceSpan = { ...source, id: 'private-source-2', pageIndex: 1, text: 'A broken path stops the current.' };
+  const cited = { ...rubric, items: [{ ...rubric.items[0], sourceIds: ['S2', 's1', 'S9'] }, ...rubric.items.slice(1).map(item => ({ ...item, sourceIds: ['S1'] }))] };
+  const bodies: Record<string, any>[] = [];
+  globalThis.fetch = (async (_input, init) => { bodies.push(JSON.parse(String(init?.body))); return response(cited); }) as typeof fetch;
+  try {
+    const result = await new StepFunTeachProvider().rubric({ title: 'Circuits', depth: 'big-picture', sources: [boxed, second] });
+    const sent = bodies[0].messages[1].content as string;
+    assert.deepEqual(JSON.parse(sent).sources, [{ id: 'S1', page: 1, text: source.text }, { id: 'S2', page: 2, text: second.text }]);
+    assert.ok(!sent.includes('private-source') && !sent.includes('rects') && !sent.includes('quality'));
+    // Known short ids map back; an id the model made up stays, so the engine can drop or reject it.
+    assert.deepEqual(result.data.items[0].sourceIds, ['private-source-2', 'private-source-1', 'S9']);
+    assert.ok(result.data.items.slice(1).every(item => item.sourceIds[0] === 'private-source-1'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.STEPFUN_API_KEY; else process.env.STEPFUN_API_KEY = oldKey;
+  }
+  // Rubric citations given to the Judge use the same short ids; ones outside the supplied notes are left out.
+  const { wire } = compactSources({ sources: [source], rubric: [{ id: 'item-1', sourceIds: ['private-source-1', 'not-supplied'] }] });
+  assert.deepEqual((wire as { rubric: { sourceIds: string[] }[] }).rubric[0].sourceIds, ['S1']);
+  assert.deepEqual(compactSources({ transcript: [] }).wire, { transcript: [] });
 });
 
 test('per-role StepFun timeouts fit inside the 180-second Vercel request budget', () => {

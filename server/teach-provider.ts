@@ -81,6 +81,28 @@ export function clampToSchema(value: unknown, schema: JsonSchemaNode | undefined
   }
   return value;
 }
+// Notes reach Step 5 as short ids (S1, S2…) with their text only. Page boxes and long hash ids
+// tripled the input, and a long id is easy for the model to miscopy. Every sourceIds list in the input is
+// written with the short ids and every sourceIds list in the answer is mapped back before validation;
+// an id the model invented stays as it is, so the engine still rejects it.
+type WireSpan = { id: string; pageIndex: number; text: string };
+export function compactSources(data: unknown): { wire: unknown; restore: (value: unknown) => unknown } {
+  const sources = data && typeof data === 'object' && Array.isArray((data as { sources?: unknown }).sources) ? (data as { sources: WireSpan[] }).sources : null;
+  if (!sources) return { wire: data, restore: value => value };
+  const toShort = new Map(sources.map((span, index) => [span.id, `S${index + 1}`]));
+  const toLong = new Map([...toShort].map(([long, short]) => [short, long]));
+  const mapIds = (value: unknown, table: Map<string, string>, keepUnknown: boolean): unknown => {
+    if (Array.isArray(value)) return value.map(item => mapIds(item, table, keepUnknown));
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, key === 'sourceIds' && Array.isArray(nested)
+      ? nested.flatMap(id => { const known = table.get(String(id).trim().toUpperCase()) ?? table.get(String(id)); return known ? [known] : keepUnknown ? [id] : []; })
+      : mapIds(nested, table, keepUnknown)]));
+  };
+  const wire = Object.fromEntries(Object.entries(data as Record<string, unknown>).map(([key, value]) => [key, key === 'sources'
+    ? sources.map((span, index) => ({ id: `S${index + 1}`, page: span.pageIndex + 1, text: span.text }))
+    : mapIds(value, toShort, false)]));
+  return { wire, restore: value => mapIds(value, toLong, true) };
+}
 function structuralSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(structuralSchema);
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
@@ -197,14 +219,15 @@ export class StepFunTeachProvider implements TeachProvider {
   }
   private async call<T>(role: Role, model: string, schema: z.ZodType<T>, system: string, data: unknown, repair?: string, timeoutMs = callTimeoutMs(role)): Promise<ModelResult<T>> {
     const jsonObjectMode = process.env.STEPFUN_JSON_MODE === 'object';
+    const { wire, restore } = compactSources(data);
     const { content, durationMs, reject, usage } = await this.complete(role, model, {
       // In plain JSON mode the model only sees the schema if the instructions include it.
       messages: [{ role: 'system', content: jsonObjectMode ? `${system}\n\nJSON schema for your answer:\n${JSON.stringify(structuralSchema(z.toJSONSchema(schema)))}` : system },
-        { role: 'user', content: JSON.stringify(data) }, ...(repair ? [{ role: 'user', content: repair }] : [])],
+        { role: 'user', content: JSON.stringify(wire) }, ...(repair ? [{ role: 'user', content: repair }] : [])],
       response_format: jsonObjectMode ? { type: 'json_object' } : { type: 'json_schema', json_schema: { name: `teach_stu_${role}`, strict: true, schema: structuralSchema(z.toJSONSchema(schema)) } },
     }, timeoutMs);
     let json: unknown;
-    try { json = JSON.parse(content); } catch { return reject('content was not valid JSON'); }
+    try { json = restore(JSON.parse(content)); } catch { return reject('content was not valid JSON'); }
     const parsed = schema.safeParse(clampToSchema(json, z.toJSONSchema(schema) as JsonSchemaNode));
     if (!parsed.success) return reject(`schema: ${parsed.error.issues.slice(0, 6).map(issue => `${issue.path.join('.') || '(root)'} ${issue.message}`).join('; ')}`);
     // Safe operational metadata only: never log inputs, outputs, or credentials.

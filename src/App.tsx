@@ -16,7 +16,9 @@ type Progress = { total: number; credited: number; percent: number; mode: Mode }
 type DebugEvidence = { credits: { itemId: string; quote: string }[]; revocations: { itemId: string; quote: string }[];
   problems: { type: string; description: string }[]; focus?: { type: string; anchorQuote: string; instruction: string };
   mistakeAccepted: boolean; models: { judge: string; stu: string }; durationMs: { judge: number; stu: number } };
-type Message = { id: string; role: 'user' | 'assistant'; text: string; sourceIds?: string[]; debug?: DebugEvidence };
+type Message = { id: string; role: 'user' | 'assistant'; text: string; sourceIds?: string[]; debug?: DebugEvidence;
+  /** Shown in the thread at once, before the server confirms it with Stu's reply. Never saved. */
+  pending?: boolean };
 type TopicResponse = { topicId: string; stateToken: string; progress: Progress; message?: Message; transition?: boolean; liveStep5: boolean; debug?: DebugEvidence;
   judgePending?: boolean; judgedMessageIds?: string[]; next?: 'brief' };
 type SavedSession = { id: string; name: string; depth: Depth; mode: 'live' | 'demo'; sampleId?: 'analysis' | 'research';
@@ -38,6 +40,12 @@ const fallbackConfig: AppConfig = { liveAvailable: false, voiceAvailable: false,
 const hostingPreview = import.meta.env.VITE_HOSTING_ONLY === 'true';
 const previewToken = 'hosting-preview';
 const plainDocs = (docs: StudyDocument[]) => docs.map(({ blob, ...doc }) => doc);
+/** An unconfirmed message goes back into the box, so a failed, cancelled or reloaded send loses nothing. */
+function unsend(session: SavedSession, ids?: Set<string>): SavedSession {
+  const unsent = session.history.filter(message => message.pending && (!ids || ids.has(message.id)));
+  if (!unsent.length) return session;
+  return { ...session, history: session.history.filter(message => !unsent.includes(message)), draft: [...unsent.map(message => message.text), session.draft.trim()].filter(Boolean).join('\n\n') };
+}
 async function api<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   // Slightly longer than the server's 180 s function limit so the server's own error message arrives.
   const timeout = AbortSignal.timeout(185000);
@@ -103,14 +111,20 @@ export default function App() {
     loadSession<SavedSession>().then(value => { if (value?.stateToken && value?.progress && (hostingPreview ? value.stateToken === previewToken : value.stateToken !== previewToken)) setSaved(value); }).catch(() => setError('Local storage is unavailable. This session may not survive a refresh.'));
   }, []);
   useEffect(() => { const breakpoint = window.matchMedia('(min-width: 1191px)'); const changed = () => setSidebar(breakpoint.matches); breakpoint.addEventListener('change', changed); return () => breakpoint.removeEventListener('change', changed); }, []);
-  useEffect(() => { if (!session) return; setSaveState('Saving…'); saveQueue.current = saveQueue.current.then(() => saveSession(session)).then(() => { setSaved(session); setSaveState('Saved on this device'); }).catch(() => setSaveState('Could not save — keep this tab open')); }, [session]);
+  useEffect(() => { if (!session) return; const settled = unsend(session); setSaveState('Saving…'); saveQueue.current = saveQueue.current.then(() => saveSession(settled)).then(() => { setSaved(settled); setSaveState('Saved on this device'); }).catch(() => setSaveState('Could not save — keep this tab open')); }, [session]);
   function patch(update: Partial<SavedSession>) { setSession(current => current ? { ...current, ...update, updatedAt: Date.now() } : current); }
-  function interrupt() { gate.current.cancel(); setBusy(false); voice.cancelRecording(); voice.stopPlayback(); }
-  function navigate(documentId: string, pageIndex: number) { interrupt(); patch({ documentId, pageIndex }); setSelection(null); setHighlights([]); }
+  function interrupt() {
+    gate.current.cancel(); setBusy(false); setWaitingForJudge(false); voice.cancelRecording(); voice.stopPlayback();
+    const current = sessionRef.current; const restored = current && unsend(current);
+    if (restored && restored !== current) { setSession(restored); sessionRef.current = restored; }
+  }
+  // Reading the notes leaves a reply in flight alone; only voice stops.
+  function stopVoice() { voice.cancelRecording(); voice.stopPlayback(); }
+  function navigate(documentId: string, pageIndex: number) { stopVoice(); patch({ documentId, pageIndex }); setSelection(null); setHighlights([]); }
   function showSources(ids: string[]) {
     const current = sessionRef.current; if (!current) return;
     const span = current.documents.flatMap(document => document.spans).find(item => ids.includes(item.id));
-    if (span) { interrupt(); patch({ documentId: span.documentId, pageIndex: span.pageIndex }); setHighlights(ids); setTab('notes'); setSidebar(false); if (screen === 'recap') setScreen('study'); }
+    if (span) { stopVoice(); patch({ documentId: span.documentId, pageIndex: span.pageIndex }); setHighlights(ids); setTab('notes'); setSidebar(false); if (screen === 'recap') setScreen('study'); }
   }
   function sourceLabel(ids: string[]) {
     const current = sessionRef.current ?? saved;
@@ -168,22 +182,34 @@ export default function App() {
   }
   async function teach() {
     if (hostingPreview) return;
-    if (!sessionRef.current?.draft.trim()) return;
-    // The next reply must build on the latest grading, so let a running grading land first.
-    if (judgeRun.current) { setWaitingForJudge(true); await judgeRun.current; setWaitingForJudge(false); }
-    const current = sessionRef.current; if (!current?.draft.trim()) return;
+    const start = sessionRef.current; const text = start?.draft.trim();
+    if (!start || !text || start.history.some(message => message.pending)) return;
     voice.cancelRecording(); voice.stopPlayback(); const ticket = gate.current.begin(); const turnId = uid(); const messageId = uid(); setBusy(true); setError('');
+    // The message shows as sent right away; Stu's reply confirms it.
+    const sent: SavedSession = { ...start, history: [...start.history, { id: messageId, role: 'user', text, pending: true }], draft: '', updatedAt: Date.now() };
+    setSession(sent); sessionRef.current = sent;
     try {
-      const result = await api<TopicResponse>('/api/teach', { topicId: current.id, stateToken: current.stateToken, documents: plainDocs(current.documents), turnId, messageId, revision: ticket.revision, text: current.draft.trim() }, ticket.signal);
-      if (!gate.current.current(ticket.revision) || sessionRef.current?.id !== current.id || result.topicId !== current.id) return;
-      const teacher: Message = { id: messageId, role: 'user', text: current.draft.trim() };
-      const next: SavedSession = { ...sessionRef.current, stateToken: result.stateToken, progress: result.progress, liveStep5: current.liveStep5 || (current.mode === 'live' && result.liveStep5),
-        judgePending: Boolean(result.judgePending), history: [...current.history, teacher, ...(result.message ? [result.message] : [])], draft: '', updatedAt: Date.now() };
+      // The next reply must build on the latest grading, so let a running grading land first.
+      if (judgeRun.current) { setWaitingForJudge(true); await judgeRun.current; setWaitingForJudge(false); }
+      ticket.signal.throwIfAborted();
+      const current = sessionRef.current; if (current?.id !== start.id) return;
+      const result = await api<TopicResponse>('/api/teach', { topicId: current.id, stateToken: current.stateToken, documents: plainDocs(current.documents), turnId, messageId, revision: ticket.revision, text }, ticket.signal);
+      const latest = sessionRef.current;
+      if (!gate.current.current(ticket.revision) || latest?.id !== current.id || result.topicId !== current.id) return;
+      const history = latest.history.map(message => message.id === messageId ? { id: messageId, role: 'user' as const, text } : message);
+      const next: SavedSession = { ...latest, stateToken: result.stateToken, progress: result.progress, liveStep5: latest.liveStep5 || (latest.mode === 'live' && result.liveStep5),
+        judgePending: Boolean(result.judgePending), history: [...history, ...(result.message ? [result.message] : [])], updatedAt: Date.now() };
       setSession(next); sessionRef.current = next;
       if (next.audioOutput && config.voiceAvailable && result.message) void voice.speak(result.message.text);
       if (result.judgePending) void runJudge();
-    } catch (cause) { if (gate.current.current(ticket.revision)) setError(cause instanceof Error ? cause.message : 'The connection was interrupted. Your draft is safe.'); }
-    finally { if (gate.current.current(ticket.revision)) setBusy(false); }
+    } catch (cause) { if (gate.current.current(ticket.revision)) setError(cause instanceof Error ? cause.message : 'The connection was interrupted. Your words are back in the box.'); }
+    finally {
+      setWaitingForJudge(false);
+      if (gate.current.current(ticket.revision)) setBusy(false);
+      // Still unconfirmed here means it failed or was cancelled: put the words back.
+      const latest = sessionRef.current;
+      if (latest?.id === start.id) { const restored = unsend(latest, new Set([messageId])); if (restored !== latest) { setSession(restored); sessionRef.current = restored; } }
+    }
   }
   /** Step 5 Judge grades what Stu already answered; on completion a second call brings Stu's teach-back. */
   function runJudge(): Promise<void> {
@@ -202,7 +228,7 @@ export default function App() {
           const judged = new Set(result.judgedMessageIds ?? []);
           const history = latest.history.map(message => config.judgeDebugAvailable && result.debug && judged.has(message.id) ? { ...message, debug: result.debug } : message);
           const next: SavedSession = { ...latest, stateToken: result.stateToken, progress: result.progress, mood, judgePending: result.next === 'brief',
-            liveStep5: latest.liveStep5 || (latest.mode === 'live' && result.liveStep5), history: result.message ? [...history, result.message] : history, updatedAt: Date.now() };
+            liveStep5: latest.liveStep5 || (latest.mode === 'live' && result.liveStep5), history: result.message ? [...history.filter(message => !message.pending), result.message, ...history.filter(message => message.pending)] : history, updatedAt: Date.now() };
           setSession(next); sessionRef.current = next;
           if (result.message && next.audioOutput && config.voiceAvailable) void voice.speak(result.message.text);
           if (result.next !== 'brief') return;
@@ -270,7 +296,7 @@ export default function App() {
               {config.voiceAvailable && <small className="voice-limit">Up to 3 minutes per turn · review before sending</small>}
               {latest && config.voiceAvailable && !voice.speaking && <button className="text-button" onClick={() => void voice.speak(latest.text)}><Volume2 size={13} />Read aloud</button>}
               <button className="type-label text-button" onClick={() => { voice.cancelRecording(); editor.current?.focus(); }}><Keyboard size={15} />Type instead<span>or edit your transcript</span></button>
-              <form className="answer-form" onSubmit={event => { event.preventDefault(); if (session.draft.trim()) void teach(); }}><textarea ref={editor} aria-label="Your explanation" placeholder={relearn ? 'Answer Stu’s question in your own words…' : 'In my own words…'} value={session.draft} onChange={event => { if (busy || voice.recording || voice.transcribing || voice.requestingPermission) interrupt(); patch({ draft: event.target.value }); }} onKeyDown={event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && session.draft.trim()) { event.preventDefault(); void teach(); } }} /><div><span>{voice.transcribing ? 'Review the transcript before sending.' : 'Your words are the lesson.'}</span><button className="send-button" aria-label="Send explanation" disabled={busy || !session.draft.trim()}><Send size={16} /></button></div></form>
+              <form className="answer-form" onSubmit={event => { event.preventDefault(); if (session.draft.trim() && !busy) void teach(); }}><textarea ref={editor} aria-label="Your explanation" placeholder={relearn ? 'Answer Stu’s question in your own words…' : 'In my own words…'} value={session.draft} onChange={event => { if (voice.recording || voice.transcribing || voice.requestingPermission) voice.cancelRecording(); patch({ draft: event.target.value }); }} onKeyDown={event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && session.draft.trim() && !busy) { event.preventDefault(); void teach(); } }} /><div><span>{voice.transcribing ? 'Review the transcript before sending.' : 'Your words are the lesson.'}</span><button className="send-button" aria-label="Send explanation" disabled={busy || !session.draft.trim()}><Send size={16} /></button></div></form>
               {busy && <button className="text-button" onClick={interrupt}><Square size={12} />Cancel response</button>}
               <div className="help-actions">{session.documents.length > 0 && <button onClick={() => setTab('notes')}><BookOpen size={16} />Look at my notes<ChevronRight size={13} /></button>}<button onClick={() => setSidebar(!sidebar)}><Lightbulb size={16} />About this topic<ChevronRight size={13} /></button></div>
               <div className="companion-footer"><span>One idea at a time.</span><span>No rush.</span></div>

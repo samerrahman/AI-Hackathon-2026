@@ -109,24 +109,47 @@ function validateStuText(text: string, mode: TeachMode) {
   const sentences = text.split(/[.!?]+/).filter(part => part.trim()).length;
   if (mode === 'teach' && sentences > 4) throw new ApiError(502, 'Stu returned an overlong response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: ${sentences} sentences`);
 }
-// StepFun's thinking time for the same short reply swings from about 5 to 30 s, and some samples run away
-// entirely. Stu therefore races two samples and keeps the first that follows his rules; the slower one is
-// ignored. Provider, auth, balance and timeout failures are surfaced; broken or runaway output is not.
-async function stuReply(provider: TeachProvider, input: StuInput) {
-  const attempt = async () => {
+// Step 5 and Stu vary a lot from run to run in thinking time, and now and then a sample runs away or
+// returns an empty answer. Two samples run in parallel and the first that passes validation wins; the
+// slower one is ignored. Provider, auth, balance and timeout failures are surfaced; broken output is not.
+async function firstValid<T>(attempt: () => Promise<T>, fallback: () => ApiError): Promise<T> {
+  try {
+    return await Promise.any([attempt(), attempt()]);
+  } catch (error) {
+    const errors: unknown[] = error instanceof AggregateError ? error.errors : [error];
+    const retryable = (cause: unknown) => cause instanceof z.ZodError || (cause instanceof ApiError && (cause.code === 'INVALID_MODEL_OUTPUT' || cause.code === 'INVALID_SOURCE'));
+    throw errors.find(cause => !retryable(cause)) ?? errors.find(cause => cause instanceof ApiError) ?? fallback();
+  }
+}
+function stuReply(provider: TeachProvider, input: StuInput) {
+  return firstValid(async () => {
     const stuCall = await provider.stu(input);
     const stu = stuSchema.parse(stuCall.data);
     validateStuText(stu.text, input.mode);
     if (input.lastQuestionStyle === stu.questionStyle) throw new ApiError(502, 'Stu repeated a question style. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: repeated ${stu.questionStyle} style`);
     return { stuCall, stu };
-  };
-  try {
-    return await Promise.any([attempt(), attempt()]);
-  } catch (error) {
-    const errors: unknown[] = error instanceof AggregateError ? error.errors : [error];
-    const retryable = (cause: unknown) => cause instanceof z.ZodError || (cause instanceof ApiError && cause.code === 'INVALID_MODEL_OUTPUT');
-    throw errors.find(cause => !retryable(cause)) ?? errors.find(cause => cause instanceof ApiError) ?? new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
+  }, () => new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT'));
+}
+// Long notes are sampled evenly for the planner: each page keeps its headings and then its text in reading
+// order up to an equal share, so a 100-page PDF plans about as fast as a handout. Ids are unchanged, so
+// citations still resolve, and the Judge later reads the full spans the rubric cites.
+const PLAN_SOURCE_CHARACTERS = 40_000;
+export function planSources(all: SourceSpan[], budget = PLAN_SOURCE_CHARACTERS): SourceSpan[] {
+  if (all.reduce((n, span) => n + span.text.length, 0) <= budget) return all;
+  const pages = new Map<string, SourceSpan[]>();
+  for (const span of all) { const key = `${span.documentId}\0${span.pageIndex}`; pages.set(key, [...(pages.get(key) ?? []), span]); }
+  const share = Math.max(200, Math.floor(budget / pages.size));
+  const kept = new Map<string, SourceSpan>();
+  for (const spans of pages.values()) {
+    let room = share;
+    for (const span of [...spans.filter(span => span.kind === 'heading'), ...spans.filter(span => span.kind !== 'heading')]) {
+      if (room < 40) break;
+      if (span.text.length <= room) kept.set(span.id, span);
+      else { const cut = span.text.slice(0, room); const space = cut.lastIndexOf(' '); kept.set(span.id, { ...span, text: `${space > room * 0.6 ? cut.slice(0, space) : cut}…` }); }
+      room -= span.text.length;
+    }
   }
+  return all.flatMap(span => kept.has(span.id) ? [kept.get(span.id)!] : []);
 }
 function verifiedRelearnBrief(candidate: RelearnBrief, state: TeachState, sources: SourceSpan[]) {
   const brief = relearnBriefSchema.parse(candidate);
@@ -148,9 +171,18 @@ const sourcesOf = (documents: CreateTopicRequest['documents']) => documents.leng
 export async function createTeachTopic(request: CreateTopicRequest, provider: TeachProvider): Promise<TeachResponse> {
   const sources = sourcesOf(request.documents);
   if (request.mode === 'demo' && !request.sampleId) throw new ApiError(400, 'Choose a bundled sample for a sample session.', 'DEMO_ONLY');
-  const generated = await provider.rubric({ title: request.title, depth: request.depth, sources });
-  const draft = rubricSchema.parse(generated.data);
-  const rubric = draft.items.map(item => { if (sources.length) requireReferences(item.sourceIds, sources); return { ...item, sourceIds: sources.length ? item.sourceIds : [], id: randomUUID() }; });
+  const planning = planSources(sources);
+  const draft = await firstValid(async () => {
+    const generated = await provider.rubric({ title: request.title, depth: request.depth, sources: planning });
+    const plan = rubricSchema.parse(generated.data);
+    if (!sources.length) return plan;
+    // A stray citation should not discard a minute of Step 5 work: drop ids that are not in the notes, then
+    // items left citing nothing, and keep the plan only if it still passes every rubric rule.
+    const known = new Set(sources.map(span => span.id));
+    const cited = plan.items.map(item => ({ ...item, sourceIds: item.sourceIds.filter(id => known.has(id)) })).filter(item => item.sourceIds.length);
+    return rubricSchema.parse({ ...plan, items: cited });
+  }, () => new ApiError(502, 'Step 5 could not build a study plan from these notes. Please retry.', 'INVALID_MODEL_OUTPUT'));
+  const rubric = draft.items.map(item => ({ ...item, sourceIds: sources.length ? item.sourceIds : [], id: randomUUID() }));
   const topicId = randomUUID();
   const state: TeachState = { version: 1, topicId, scope: scopeFor(request.documents), title: request.title, depth: request.depth,
     sample: request.mode === 'demo', sampleId: request.sampleId, mode: 'teach', rubric, coreIdeas: draft.coreIdeas,

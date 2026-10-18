@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SourceSpan, StudyDocument } from '../shared/types.js';
 import { ApiError } from './schema.js';
-import { createTeachTopic, openTeachState, runJudgeTurn, runTeachTurn } from './teach-engine.js';
+import { createTeachTopic, openTeachState, planSources, runJudgeTurn, runTeachTurn } from './teach-engine.js';
 import { DemoTeachProvider } from './teach-demo.js';
 import type { BriefInput, JudgeInput, ModelResult, StuInput, TeachProvider } from './teach-provider.js';
 import { createTopicSchema, rubricSchema, type Depth, type JudgeResult, type RelearnBrief, type RubricDraft, type StuResult } from './teach-schema.js';
@@ -63,7 +63,8 @@ test('rubric depth contract keeps cover at gist level and allows deeper explain 
   assert.equal(rubricSchema.safeParse({ ...draft, items: [{ ...draft.items[0], requirement: 'State the exact equation I = V / R' }, ...draft.items.slice(1)] }).success, false);
   for (const depth of ['big-picture', 'exam-ready', 'expert'] as const) {
     const p = provider(); const created = await topic(p.instance, depth);
-    assert.deepEqual(p.calls, ['rubric']);
+    // Two rubric samples race; the first valid one is used.
+    assert.deepEqual(p.calls, ['rubric', 'rubric']);
     assert.equal(openTeachState(created.stateToken, created.topicId, [document]).depth, depth);
     assert.equal(created.progress.total, 6);
     assert.equal(created.liveStep5, false);
@@ -241,6 +242,35 @@ test('Stu races two samples and keeps the one that follows his rules', async () 
   await assert.rejects(runTeachTurn(turn(again), stillBroken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
 });
 
+test('two rubric samples race; stray citations are dropped and the first plan that passes is kept', async () => {
+  const stray = { ideaIndex: 0, stage: 'explain' as const, requirement: 'Explain a claim the notes never make', sourceIds: ['invented-id'] };
+  const p = provider(); let samples = 0;
+  p.instance.rubric = async () => { p.calls.push('rubric'); return model(samples++ === 0 ? { ...draft, items: [...draft.items, stray] } : { ...draft, coreIdeas: ['second sample', 'unused'] }); };
+  const created = await topic(p.instance);
+  const state = openTeachState(created.stateToken, created.topicId, [document]);
+  assert.deepEqual(p.calls, ['rubric', 'rubric']);
+  assert.equal(created.progress.total, draft.items.length);
+  assert.ok(!state.rubric.some(item => item.requirement === stray.requirement));
+  assert.deepEqual(state.coreIdeas, draft.coreIdeas);
+  // Both samples broken: a clear, retryable error rather than a half-grounded plan.
+  const broken = provider({ rubric: { ...draft, items: draft.items.map(item => ({ ...item, sourceIds: ['invented-id'] })) } });
+  await assert.rejects(topic(broken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
+});
+
+test('long notes are sampled evenly for the planner, and short notes go through whole', () => {
+  const pages = Array.from({ length: 100 }, (_, index): SourceSpan[] => [
+    { id: `h-${index}`, documentId: 'doc-1', pageIndex: index, text: `Heading ${index}`, quality: 'native', kind: 'heading' },
+    { id: `p-${index}`, documentId: 'doc-1', pageIndex: index, text: `Page ${index} ${'detail '.repeat(300).trim()}`, quality: 'native', kind: 'paragraph' },
+  ]).flat();
+  const planned = planSources(pages, 40_000);
+  assert.ok(planned.reduce((n, span) => n + span.text.length, 0) <= 40_000 + 100);
+  // Every page keeps its heading and the start of its text, under its original id.
+  assert.equal(new Set(planned.map(span => span.pageIndex)).size, 100);
+  assert.equal(planned.filter(span => span.kind === 'heading').length, 100);
+  assert.ok(planned.every(span => pages.find(original => original.id === span.id)?.text.startsWith(span.text.replace(/…$/, ''))));
+  assert.deepEqual(planSources(pages.slice(0, 4), 40_000), pages.slice(0, 4));
+});
+
 test('a topic can be taught without notes; the Judge grades from its own knowledge', async () => {
   assert.equal(createTopicSchema.safeParse({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [] }).success, true);
   const noNotes: RubricDraft = { ...draft, items: draft.items.map(item => ({ ...item, sourceIds: [] })) };
@@ -249,7 +279,7 @@ test('a topic can be taught without notes; the Judge grades from its own knowled
   assert.equal(created.progress.total, 6);
   const reply = await runTeachTurn({ topicId: created.topicId, stateToken: created.stateToken, documents: [], turnId: 'turn-1', revision: 1, messageId: 'user-1', text: statement }, p.instance);
   await runJudgeTurn({ topicId: created.topicId, stateToken: reply.stateToken, documents: [] }, p.instance);
-  assert.deepEqual(p.calls, ['rubric', 'stu', 'stu', 'judge']);
+  assert.deepEqual(p.calls, ['rubric', 'rubric', 'stu', 'stu', 'judge']);
   assert.ok(reply.message?.text);
   // When notes exist, every rubric item must still cite them.
   await assert.rejects(createTeachTopic({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [document] }, provider({ rubric: noNotes }).instance));

@@ -149,3 +149,23 @@ test('“or just start talking” starts a topic with no notes and no Notes tab'
   await expect(page.getByRole('button', { name: 'Notes', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Look at my notes' })).toHaveCount(0);
 });
+
+test('“or just start talking” without a title points at the title field, and errors stay visible when scrolled', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const talk = page.getByRole('button', { name: 'or just start talking' });
+  await talk.scrollIntoViewIfNeeded();
+  await talk.click();
+  const title = page.getByRole('textbox', { name: 'Topic title' });
+  await expect(title).toHaveAttribute('aria-invalid', 'true');
+  await expect(title).toBeFocused();
+  await expect(title).toBeInViewport();
+  await expect(page.getByText('Give your topic a title first, then pick how to start.')).toBeVisible();
+  await page.route('**/api/topic', route => route.fulfill({ status: 504, json: { error: 'StepFun took too long. Your message is safe; retry.', code: 'PROVIDER_TIMEOUT' } }));
+  await title.fill('Photosynthesis');
+  await expect(title).toHaveAttribute('aria-invalid', 'false');
+  await talk.scrollIntoViewIfNeeded();
+  await talk.click();
+  await expect(page.getByRole('alert')).toContainText('StepFun took too long');
+  await expect(page.getByRole('alert')).toBeInViewport();
+});

@@ -41,6 +41,8 @@ test('StepFun wire requests use separate judge and Stu models without sending pr
     await provider.stu({ depth: 'big-picture', mode: 'teach', transcript: [{ id: 'teacher-1', role: 'user', text: 'The path closes' }],
       director: { focus: { type: 'vague', teacherMessageId: 'teacher-1', anchorQuote: 'The path closes', instruction: 'ask_clarify' }, mistake: null } });
     assert.deepEqual(bodies.map(body => body.model), ['step-5-preview', 'step-5-preview', 'step-3.7-flash']);
+    // The rubric gets more thought; per-turn Judge and Stu calls stay fast enough for the request budget.
+    assert.deepEqual(bodies.map(body => body.reasoning_effort), ['medium', 'low', 'low']);
     assert.ok(bodies.every(body => body.response_format.type === 'json_schema' && body.response_format.json_schema.strict === true));
     assert.ok(JSON.stringify(bodies[1]).includes(source.text));
     const stuPayload = JSON.stringify(bodies[2]);

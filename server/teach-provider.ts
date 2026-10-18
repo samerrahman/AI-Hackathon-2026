@@ -31,6 +31,14 @@ function structuralSchema(value: unknown): unknown {
     .map(([key, nested]) => [key, structuralSchema(nested)]));
   return value;
 }
+// Step 5 Preview reasons at length by default, which pushed a single Judge turn past the request timeout.
+// Low effort keeps each teaching turn to seconds; the rubric runs once per topic, so it gets more thought.
+// Only models with StepFun's documented low/medium/high tiers receive the field.
+function reasoningEffort(role: 'rubric' | 'judge' | 'stu', model: string): string | undefined {
+  if (!/^(step-5-preview|step-3\.7-flash)$/.test(model)) return undefined;
+  const configured = { rubric: process.env.STEPFUN_RUBRIC_REASONING_EFFORT, judge: process.env.STEPFUN_JUDGE_REASONING_EFFORT, stu: process.env.STEPFUN_STU_REASONING_EFFORT }[role];
+  return configured?.trim() || (role === 'rubric' ? 'medium' : 'low');
+}
 export class StepFunTeachProvider implements TeachProvider {
   readonly judgeModel = process.env.STEPFUN_JUDGE_MODEL || process.env.STEPFUN_MODEL || 'step-5-preview';
   readonly stuModel = process.env.STEPFUN_STU_MODEL || 'step-3.7-flash';
@@ -44,7 +52,8 @@ export class StepFunTeachProvider implements TeachProvider {
       response = await fetch(`${this.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.key}` },
         body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(data) }], stream: false,
-          response_format: { type: 'json_schema', json_schema: { name: `teach_stu_${role}`, strict: true, schema: structuralSchema(z.toJSONSchema(schema)) } }, max_tokens: role === 'stu' ? 650 : 8192 }),
+          response_format: { type: 'json_schema', json_schema: { name: `teach_stu_${role}`, strict: true, schema: structuralSchema(z.toJSONSchema(schema)) } }, max_tokens: role === 'stu' ? 650 : 8192,
+          ...(reasoningEffort(role, model) ? { reasoning_effort: reasoningEffort(role, model) } : {}) }),
         signal: AbortSignal.timeout(Number(process.env.STEPFUN_TIMEOUT_MS || 75_000)),
       });
     } catch (error) {

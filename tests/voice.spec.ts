@@ -84,12 +84,12 @@ test('transcripts remain editable; a late transcript cannot overwrite a newer ty
   await mockVoice(page);
   await openSample(page);
   const editor = page.getByRole('textbox', { name: 'Your explanation' });
-  const prompt = await page.locator('.conversation-current h2').innerText();
+  const prompt = await page.locator('.stu-message .message-bubble').last().innerText();
 
   await recordForTranscription(page);
   await page.evaluate(() => window.__stuVoiceTest.releaseTranscript());
   await expect(editor).toHaveValue('A delayed voice transcript.');
-  await expect(page.locator('.conversation-current h2')).toHaveText(prompt);
+  await expect(page.locator('.stu-message .message-bubble').last()).toHaveText(prompt);
 
   await recordForTranscription(page);
   await editor.fill('My newer explanation is still being written.');

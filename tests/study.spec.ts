@@ -5,7 +5,7 @@ async function sample(page: Page, subject: 'analysis' | 'research' = 'analysis')
   await page.getByRole('button', { name: 'Try a sample session' }).click();
   await page.getByRole('button', { name: subject === 'analysis' ? 'Sequences & convergence Real analysis' : 'Experiments & causal claims Research methods' }).click();
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toBeVisible();
-  await expect(page.locator('.conversation-current h2')).toContainText('Teach me this topic');
+  await expect(page.locator('.stu-message .message-bubble').last()).toContainText('Teach me this topic');
 }
 async function pasteTopic(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -23,7 +23,9 @@ test('sample keeps source viewer, one overall bar, fixed depth, local resume, an
   await expect(page.getByText('Sample demo', { exact: true })).toBeVisible();
   await expect(page.getByText('Step 5 Preview · Live')).toHaveCount(0);
   await expect(page.getByRole('progressbar', { name: 'Overall topic progress' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Notes', exact: true }).click();
   await expect(page.locator('.textLayer span').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Teach Stu', exact: true }).click();
   await expect(page.locator('.concept-sidebar')).not.toContainText('explained independently');
   await page.getByRole('button', { name: 'Study settings' }).click();
   await expect(page.getByText('Fixed for this topic. Start a new topic to change it.')).toBeVisible();
@@ -85,13 +87,12 @@ test('mocked live dual-model turn shows honest status, one bar, debug evidence, 
   await page.getByRole('button', { name: 'Study settings' }).click();
   await page.locator('.setting-row', { hasText: 'Show Judge Evidence' }).getByRole('button', { name: 'Off' }).click();
   await page.getByRole('button', { name: 'Close dialog' }).click();
-  await page.getByText('Your last explanation').click();
   await expect(page.getByText('Judge evidence').first()).toBeVisible();
   await page.getByRole('textbox', { name: 'Your explanation' }).fill('A second branch gives current another path if one branch is open.');
   await page.getByRole('button', { name: 'Send explanation' }).click();
   await expect(page.getByText('You taught Stu the whole topic. Now he’ll teach it back.')).toBeVisible();
   await expect(page.getByRole('progressbar', { name: 'Overall topic progress' })).toHaveAttribute('value', '8');
-  await expect(page.locator('.conversation-current .citations button')).toHaveCount(1);
+  await expect(page.locator('.stu-message .citations button')).toHaveCount(1);
   await expect(page.getByRole('progressbar')).toHaveCount(1);
 });
 
@@ -104,10 +105,31 @@ test('mobile topic panel, notes tab, and typed path avoid horizontal overflow', 
   await expect(page.locator('.topic-panel')).toContainText('Big picture');
   await page.getByRole('button', { name: 'Open notes' }).click();
   await expect(page.locator('.document-paper')).toBeVisible();
-  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await page.getByRole('button', { name: 'Teach Stu', exact: true }).click();
   await page.getByRole('textbox', { name: 'Your explanation' }).fill('Random sampling selects people, while random assignment allocates treatment.');
   await page.getByRole('button', { name: 'Send explanation' }).click();
   await expect(page.getByRole('textbox', { name: 'Your explanation' })).toHaveValue('');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  expect(await page.locator('.miso-character').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  expect(await page.locator('.chat-stu .miso-character').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+});
+
+test('a sample can be taught to completion and flips into re-learn with citations', async ({ page }) => {
+  await sample(page, 'research');
+  await page.getByRole('textbox', { name: 'Your explanation' }).fill('Random sampling decides who enters a study, while random assignment decides who receives the treatment, so causal claims about the treatment are supported for people like the sample.');
+  await page.getByRole('button', { name: 'Send explanation' }).click();
+  await expect(page.getByText('You taught Stu the whole topic. Now he’ll teach it back.')).toBeVisible();
+  const bar = page.getByRole('progressbar', { name: 'Overall topic progress' });
+  await expect(bar).toHaveAttribute('value', await bar.getAttribute('max') ?? '');
+  await expect(page.locator('.stu-message .citations button').first()).toBeVisible();
+  await page.locator('.stu-message .citations button').first().click();
+  await expect(page.locator('.document-paper')).toBeVisible();
+});
+
+test('Stu’s expression playground previews each state without a session', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Test Stu’s expressions' }).click();
+  for (const state of ['Puzzled', 'Pleased', 'Thinking']) {
+    await page.getByRole('button', { name: state }).click();
+    await expect(page.locator('.expression-stage .miso-character')).toHaveAttribute('data-state', state.toLowerCase());
+  }
 });

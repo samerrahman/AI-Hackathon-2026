@@ -33,7 +33,7 @@ export class DemoTeachProvider implements TeachProvider {
     });
     items.push({ ideaIndex: 0, stage: 'connect', requirement: `Connect ${coreIdeas[0]} with ${coreIdeas[1]}`, sourceIds: [input.sources[0].id] });
     items.push({ ideaIndex: 1, stage: 'connect', requirement: `Contrast ${coreIdeas[1]} with ${coreIdeas[2]}`, sourceIds: [input.sources[0].id] });
-    items.push({ ideaIndex: 2, stage: 'connect', requirement: `Show a meaningful link among these ideas`, sourceIds: [input.sources[0].id] });
+    items.push({ ideaIndex: 2, stage: 'connect', requirement: `Show how ${coreIdeas[2]} builds on ${coreIdeas[0]}`, sourceIds: [input.sources[0].id] });
     return sampleResult({ coreIdeas, items });
   }
   async judge(input: JudgeInput): Promise<ModelResult<JudgeResult>> {

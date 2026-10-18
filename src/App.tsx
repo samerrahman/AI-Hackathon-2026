@@ -36,7 +36,8 @@ const hostingPreview = import.meta.env.VITE_HOSTING_ONLY === 'true';
 const previewToken = 'hosting-preview';
 const plainDocs = (docs: StudyDocument[]) => docs.map(({ blob, ...doc }) => doc);
 async function api<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const timeout = AbortSignal.timeout(170000);
+  // Slightly longer than the server's 180 s function limit so the server's own error message arrives.
+  const timeout = AbortSignal.timeout(185000);
   const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
   const data = await response.json().catch(() => ({ error: 'The connection was interrupted. Your words are still here.' }));
   if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Stu could not finish this request. Please retry.');
@@ -141,7 +142,7 @@ export default function App() {
         setSession(next); sessionRef.current = next; setScreen('study'); setTab('notes'); setSidebar(window.innerWidth >= 1190); setRows([]); setHighlights([]); setSelection(null); setError(errors.join('\n'));
         return;
       }
-      setProcessing(talkOnly ? 'Getting Stu ready…' : 'Building a private study plan…');
+      setProcessing(talkOnly ? 'Getting Stu ready… this can take up to a minute.' : 'Building a private study plan… this can take up to a minute.');
       const result = await api<TopicResponse>('/api/topic', { title: name, depth, documents: plainDocs(docs), mode: sampleId ? 'demo' : 'live', sampleId }, ticket.signal);
       if (!gate.current.current(ticket.revision)) return;
       const next: SavedSession = { id: result.topicId, name, depth, mode: sampleId ? 'demo' : 'live', sampleId, documents: docs,

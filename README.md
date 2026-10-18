@@ -37,7 +37,7 @@ The Vercel project needs these server-side environment variables, kept out of Gi
 
 - `STEPFUN_API_KEY`: the Judge, Stu, and voice all use it.
 - `SESSION_SECRET`: a long random value that must stay the same across deployments so saved sessions remain readable.
-- Optional: `ENABLE_JUDGE_DEBUG=true` to offer the **Show Judge Evidence** setting; `STEPFUN_{RUBRIC,JUDGE,STU}_REASONING_EFFORT` to trade speed for depth (defaults `medium`, `low`, `low`).
+- Optional: `ENABLE_JUDGE_DEBUG=true` to offer the **Show Judge Evidence** setting; `STEPFUN_{RUBRIC,JUDGE,STU}_REASONING_EFFORT` to trade speed for depth (default `low` for all three) and `STEPFUN_{RUBRIC,JUDGE,STU}_TIMEOUT_MS` (defaults 150, 100 and 35 seconds, which fit Vercel's 180-second limit).
 
 See [docs/DOMAIN.md](docs/DOMAIN.md) for the Porkbun DNS records.
 

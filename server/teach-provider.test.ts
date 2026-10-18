@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SourceSpan } from '../shared/types.js';
-import { StepFunTeachProvider } from './teach-provider.js';
+import { StepFunTeachProvider, callTimeoutMs } from './teach-provider.js';
 
 const source: SourceSpan = { id: 'private-source-1', documentId: 'doc-1', pageIndex: 0, text: 'Private battery note: a closed path carries current.', quality: 'native' };
 const rubric = { coreIdeas: ['circuit', 'current'], items: [
@@ -42,7 +42,7 @@ test('StepFun wire requests use separate judge and Stu models without sending pr
       director: { focus: { type: 'vague', teacherMessageId: 'teacher-1', anchorQuote: 'The path closes', instruction: 'ask_clarify' }, mistake: null } });
     assert.deepEqual(bodies.map(body => body.model), ['step-5-preview', 'step-5-preview', 'step-3.7-flash']);
     // The rubric gets more thought; per-turn Judge and Stu calls stay fast enough for the request budget.
-    assert.deepEqual(bodies.map(body => body.reasoning_effort), ['medium', 'low', 'low']);
+    assert.deepEqual(bodies.map(body => body.reasoning_effort), ['low', 'low', 'low']);
     assert.ok(bodies.every(body => body.response_format.type === 'json_schema' && body.response_format.json_schema.strict === true));
     assert.ok(JSON.stringify(bodies[1]).includes(source.text));
     const stuPayload = JSON.stringify(bodies[2]);
@@ -59,4 +59,12 @@ test('StepFun wire requests use separate judge and Stu models without sending pr
     if (oldStu === undefined) delete process.env.STEPFUN_STU_MODEL; else process.env.STEPFUN_STU_MODEL = oldStu;
     if (oldModel === undefined) delete process.env.STEPFUN_MODEL; else process.env.STEPFUN_MODEL = oldModel;
   }
+});
+
+test('per-role StepFun timeouts fit inside the 180-second Vercel request budget', () => {
+  const rubric = callTimeoutMs('rubric'); const judge = callTimeoutMs('judge'); const stu = callTimeoutMs('stu');
+  assert.ok(rubric < 180_000);
+  // One Judge call, one Stu call, and at most one Stu retry share a teaching request.
+  assert.ok(judge + stu * 2 < 180_000);
+  assert.ok(rubric > 75_000 && judge > 75_000);
 });

@@ -31,13 +31,21 @@ function structuralSchema(value: unknown): unknown {
     .map(([key, nested]) => [key, structuralSchema(nested)]));
   return value;
 }
-// Step 5 Preview reasons at length by default, which pushed a single Judge turn past the request timeout.
-// Low effort keeps each teaching turn to seconds; the rubric runs once per topic, so it gets more thought.
+// Step 5 Preview reasons at length by default: on Vercel both the rubric (with notes) and a Judge turn
+// ran past 75 s and failed. Low effort keeps each call to seconds; env vars can raise it.
 // Only models with StepFun's documented low/medium/high tiers receive the field.
-function reasoningEffort(role: 'rubric' | 'judge' | 'stu', model: string): string | undefined {
+type Role = 'rubric' | 'judge' | 'stu';
+export function reasoningEffort(role: Role, model: string): string | undefined {
   if (!/^(step-5-preview|step-3\.7-flash)$/.test(model)) return undefined;
   const configured = { rubric: process.env.STEPFUN_RUBRIC_REASONING_EFFORT, judge: process.env.STEPFUN_JUDGE_REASONING_EFFORT, stu: process.env.STEPFUN_STU_REASONING_EFFORT }[role];
-  return configured?.trim() || (role === 'rubric' ? 'medium' : 'low');
+  return configured?.trim() || 'low';
+}
+// Per-call limits inside Vercel's 180 s request budget. The rubric is the only call in /api/topic;
+// /api/teach runs the Judge, then Stu, plus at most one Stu retry (100 + 35 + 35 s).
+const DEFAULT_TIMEOUT_MS: Record<Role, number> = { rubric: 150_000, judge: 100_000, stu: 35_000 };
+export function callTimeoutMs(role: Role): number {
+  const configured = Number({ rubric: process.env.STEPFUN_RUBRIC_TIMEOUT_MS, judge: process.env.STEPFUN_JUDGE_TIMEOUT_MS, stu: process.env.STEPFUN_STU_TIMEOUT_MS }[role]);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS[role];
 }
 export class StepFunTeachProvider implements TeachProvider {
   readonly judgeModel = process.env.STEPFUN_JUDGE_MODEL || process.env.STEPFUN_MODEL || 'step-5-preview';
@@ -54,7 +62,7 @@ export class StepFunTeachProvider implements TeachProvider {
         body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(data) }], stream: false,
           response_format: { type: 'json_schema', json_schema: { name: `teach_stu_${role}`, strict: true, schema: structuralSchema(z.toJSONSchema(schema)) } }, max_tokens: role === 'stu' ? 650 : 8192,
           ...(reasoningEffort(role, model) ? { reasoning_effort: reasoningEffort(role, model) } : {}) }),
-        signal: AbortSignal.timeout(Number(process.env.STEPFUN_TIMEOUT_MS || 75_000)),
+        signal: AbortSignal.timeout(callTimeoutMs(role)),
       });
     } catch (error) {
       if (error instanceof Error && error.name === 'TimeoutError') throw new ApiError(504, 'StepFun took too long. Your message is safe; retry.', 'PROVIDER_TIMEOUT');

@@ -109,21 +109,23 @@ function validateStuText(text: string, mode: TeachMode) {
   const sentences = text.split(/[.!?]+/).filter(part => part.trim()).length;
   if (mode === 'teach' && sentences > 4) throw new ApiError(502, 'Stu returned an overlong response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: ${sentences} sentences`);
 }
-// Stu's output rules are strict, so give a fresh sample one more try before surfacing an error.
-// Provider failures (network, auth, balance) are not retried here.
+// StepFun's thinking time for the same short reply swings from about 5 to 30 s, and some samples run away
+// entirely. Stu therefore races two samples and keeps the first that follows his rules; the slower one is
+// ignored. Provider, auth, balance and timeout failures are surfaced; broken or runaway output is not.
 async function stuReply(provider: TeachProvider, input: StuInput) {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      const stuCall = await provider.stu(input);
-      const stu = stuSchema.parse(stuCall.data);
-      validateStuText(stu.text, input.mode);
-      if (input.lastQuestionStyle === stu.questionStyle) throw new ApiError(502, 'Stu repeated a question style. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: repeated ${stu.questionStyle} style`);
-      return { stuCall, stu };
-    } catch (error) {
-      // Retry broken or runaway output once; never retry provider, auth, balance or timeout failures.
-      const retryable = error instanceof z.ZodError || (error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
-      if (attempt >= 2 || !retryable) throw error;
-    }
+  const attempt = async () => {
+    const stuCall = await provider.stu(input);
+    const stu = stuSchema.parse(stuCall.data);
+    validateStuText(stu.text, input.mode);
+    if (input.lastQuestionStyle === stu.questionStyle) throw new ApiError(502, 'Stu repeated a question style. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: repeated ${stu.questionStyle} style`);
+    return { stuCall, stu };
+  };
+  try {
+    return await Promise.any([attempt(), attempt()]);
+  } catch (error) {
+    const errors: unknown[] = error instanceof AggregateError ? error.errors : [error];
+    const retryable = (cause: unknown) => cause instanceof z.ZodError || (cause instanceof ApiError && cause.code === 'INVALID_MODEL_OUTPUT');
+    throw errors.find(cause => !retryable(cause)) ?? errors.find(cause => cause instanceof ApiError) ?? new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
   }
 }
 function verifiedRelearnBrief(candidate: RelearnBrief, state: TeachState, sources: SourceSpan[]) {

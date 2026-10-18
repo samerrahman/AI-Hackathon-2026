@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SourceSpan } from '../shared/types.js';
-import { StepFunTeachProvider, callTimeoutMs } from './teach-provider.js';
+import { StepFunTeachProvider, callTimeoutMs, clampToSchema } from './teach-provider.js';
 import { ApiError } from './schema.js';
-import { rubricSchema } from './teach-schema.js';
+import { judgeSchema, rubricSchema } from './teach-schema.js';
+import { z } from 'zod';
 
 const source: SourceSpan = { id: 'private-source-1', documentId: 'doc-1', pageIndex: 0, text: 'Private battery note: a closed path carries current.', quality: 'native' };
 const rubric = { coreIdeas: ['circuit', 'current'], items: [
@@ -108,4 +109,26 @@ test('an invalid rubric gets one repair attempt with a content-free reason, then
     globalThis.fetch = originalFetch; console.warn = warn;
     if (oldKey === undefined) delete process.env.STEPFUN_API_KEY; else process.env.STEPFUN_API_KEY = oldKey;
   }
+});
+
+test('slightly over-long model output is trimmed to fit instead of rejected', async () => {
+  const oldKey = process.env.STEPFUN_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.STEPFUN_API_KEY = 'private-test-key';
+  const longIdea = 'How the interaction between buyers and sellers in a competitive market sets an equilibrium price and quantity over time';
+  let calls = 0;
+  globalThis.fetch = (async () => { calls++; return response({ ...rubric, coreIdeas: [longIdea, 'current'] }); }) as typeof fetch;
+  try {
+    const result = await new StepFunTeachProvider().rubric({ title: 'Markets', depth: 'big-picture', sources: [source] });
+    assert.equal(calls, 1);
+    assert.ok(result.data.coreIdeas[0].length <= 100);
+    assert.ok(longIdea.startsWith(result.data.coreIdeas[0]));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.STEPFUN_API_KEY; else process.env.STEPFUN_API_KEY = oldKey;
+  }
+  // A trimmed evidence quote is still an exact prefix of the teacher's words.
+  const quote = 'word '.repeat(400).trim();
+  const clamped = clampToSchema({ credits: [{ rubricItemId: 'i', teacherMessageId: 't', quote }], revocations: [], problems: [] }, z.toJSONSchema(judgeSchema) as never) as { credits: { quote: string }[] };
+  assert.ok(clamped.credits[0].quote.length <= 1200 && quote.startsWith(clamped.credits[0].quote));
 });

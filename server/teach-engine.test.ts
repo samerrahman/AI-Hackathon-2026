@@ -88,7 +88,8 @@ test('Stu replies first without the Judge; Stu never receives notes, rubric, sou
   const p = provider({ judge: input => judgeFor(input, [itemId]) }); const created = await topic(p.instance); itemId = firstItem(created);
   p.calls.length = 0;
   const reply = await runTeachTurn(turn(created), p.instance);
-  assert.deepEqual(p.calls, ['stu']);
+  // Two Stu samples race; the first valid one is used.
+  assert.deepEqual(p.calls, ['stu', 'stu']);
   assert.equal(reply.judgePending, true);
   assert.equal(reply.progress.credited, 0);
   assert.equal(reply.message?.sourceIds, undefined);
@@ -100,14 +101,14 @@ test('Stu replies first without the Judge; Stu never receives notes, rubric, sou
   assert.ok(!payload.includes('credited'));
   assert.ok(!payload.includes('sourceIds'));
   const graded = await runJudgeTurn(grade(reply), p.instance);
-  assert.deepEqual(p.calls, ['stu', 'judge']);
+  assert.deepEqual(p.calls, ['stu', 'stu', 'judge']);
   assert.deepEqual(p.judgeInputs[0].pendingTeacherMessageIds, ['user-1']);
   assert.deepEqual(graded.judgedMessageIds, ['user-1']);
   assert.equal(graded.progress.credited, 1);
   assert.equal(graded.liveStep5, true);
   // Nothing left to grade: the Judge is not called again.
   const idle = await runJudgeTurn(grade(graded), p.instance);
-  assert.deepEqual(p.calls, ['stu', 'judge']);
+  assert.deepEqual(p.calls, ['stu', 'stu', 'judge']);
   assert.equal(idle.progress.credited, 1);
 });
 
@@ -194,13 +195,13 @@ test('completion switches to re-learn; a second grading call writes the verified
   assert.equal(graded.transition, true); assert.equal(graded.next, 'brief'); assert.equal(graded.progress.mode, 'relearn'); assert.equal(graded.progress.percent, 100);
   assert.equal(graded.message, undefined);
   const teachBack = await runJudgeTurn(grade(graded), finishing.instance);
-  assert.deepEqual(finishing.calls.slice(-2), ['brief', 'stu']);
+  assert.deepEqual(finishing.calls.slice(-3), ['brief', 'stu', 'stu']);
   assert.deepEqual(teachBack.message?.sourceIds, [source.id]);
   assert.ok(finishing.briefInputs[0].verifiedTeacherQuotes.includes(statement));
   assert.equal(finishing.briefInputs[0].transition, true);
   assert.equal((finishing.stuInputs.at(-1)!.director as { brief: { quizQuestion: string } }).brief.quizQuestion, 'What happens when the switch opens?');
   const quiz = await runTeachTurn(turn(teachBack, 'When the switch opens the path breaks, so no current flows.', 2, 'user-2'), finishing.instance);
-  assert.deepEqual(finishing.calls.slice(-2), ['brief', 'stu']);
+  assert.deepEqual(finishing.calls.slice(-3), ['brief', 'stu', 'stu']);
   assert.equal(quiz.judgePending, undefined);
   assert.equal(finishing.briefInputs.at(-1)!.transition, false);
   assert.ok(quiz.message?.text);
@@ -225,7 +226,7 @@ test('debug response is sanitized and sample never claims a live Step 5 turn', a
   assert.equal(demoGrade.liveStep5, false);
 });
 
-test('Stu gets one quiet retry when he breaks his output rules', async () => {
+test('Stu races two samples and keeps the one that follows his rules', async () => {
   let attempts = 0;
   const p = provider({ stu: () => (++attempts === 1
     ? { text: 'One? Two? Three?', questionStyle: 'literal' }
@@ -248,7 +249,7 @@ test('a topic can be taught without notes; the Judge grades from its own knowled
   assert.equal(created.progress.total, 6);
   const reply = await runTeachTurn({ topicId: created.topicId, stateToken: created.stateToken, documents: [], turnId: 'turn-1', revision: 1, messageId: 'user-1', text: statement }, p.instance);
   await runJudgeTurn({ topicId: created.topicId, stateToken: reply.stateToken, documents: [] }, p.instance);
-  assert.deepEqual(p.calls, ['rubric', 'stu', 'judge']);
+  assert.deepEqual(p.calls, ['rubric', 'stu', 'stu', 'judge']);
   assert.ok(reply.message?.text);
   // When notes exist, every rubric item must still cite them.
   await assert.rejects(createTeachTopic({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [document] }, provider({ rubric: noNotes }).instance));

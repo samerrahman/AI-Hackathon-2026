@@ -123,7 +123,8 @@ export default function App() {
   async function prepare(sampleId?: 'analysis' | 'research', talkOnly = false) {
     if (!sampleId && !title.trim()) {
       // Point at the field itself; a banner at the top of the page is easy to miss from the buttons below.
-      setTitleMissing(true); titleInput.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); titleInput.current?.focus({ preventScroll: true });
+      // Focus first, then jump: focusing during a smooth scroll cancels it in real browsers.
+      setTitleMissing(true); titleInput.current?.focus({ preventScroll: true }); titleInput.current?.scrollIntoView({ block: 'center' });
       return;
     }
     if (talkOnly && hostingPreview) { setError('Talking without notes needs the study server, which this preview does not have.'); return; }

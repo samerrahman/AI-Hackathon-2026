@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SourceSpan } from '../shared/types.js';
 import { StepFunTeachProvider, callTimeoutMs } from './teach-provider.js';
+import { ApiError } from './schema.js';
+import { rubricSchema } from './teach-schema.js';
 
 const source: SourceSpan = { id: 'private-source-1', documentId: 'doc-1', pageIndex: 0, text: 'Private battery note: a closed path carries current.', quality: 'native' };
 const rubric = { coreIdeas: ['circuit', 'current'], items: [
@@ -67,4 +69,40 @@ test('per-role StepFun timeouts fit inside the 180-second Vercel request budget'
   // One Judge call, one Stu call, and at most one Stu retry share a teaching request.
   assert.ok(judge + stu * 2 < 180_000);
   assert.ok(rubric > 75_000 && judge > 75_000);
+});
+
+test('cover gists may name chemicals but not numbers or equations', () => {
+  const withCover = (requirement: string) => ({ ...rubric, items: [{ ...rubric.items[0], requirement }, ...rubric.items.slice(1)] });
+  assert.equal(rubricSchema.safeParse(withCover('Name photosynthesis: plants turn CO2 and water into sugar')).success, true);
+  assert.equal(rubricSchema.safeParse(withCover('Name the 3 stages of photosynthesis')).success, false);
+  assert.equal(rubricSchema.safeParse(withCover('State that sugar = light + water')).success, false);
+});
+
+test('an invalid rubric gets one repair attempt with a content-free reason, then a clear error', async () => {
+  const oldKey = process.env.STEPFUN_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.STEPFUN_API_KEY = 'private-test-key';
+  const invalid = { ...rubric, items: [{ ...rubric.items[0], requirement: 'Name the 3 stages and the secret note' }, ...rubric.items.slice(1)] };
+  const bodies: Record<string, any>[] = [];
+  let replies = [invalid, rubric];
+  globalThis.fetch = (async (_input, init) => { bodies.push(JSON.parse(String(init?.body))); return response(replies.shift()); }) as typeof fetch;
+  const warn = console.warn; const logged: unknown[] = []; console.warn = (...args: unknown[]) => { logged.push(args); };
+  try {
+    const provider = new StepFunTeachProvider();
+    const repaired = await provider.rubric({ title: 'Circuits', depth: 'big-picture', sources: [source] });
+    assert.equal(bodies.length, 2);
+    const repairNote = bodies[1].messages.at(-1).content as string;
+    assert.match(repairNote, /rejected by the validator/);
+    assert.match(repairNote, /Cover must contain gist only/);
+    assert.ok(!repairNote.includes('secret note'));
+    assert.equal(repaired.data.items[0].requirement, rubric.items[0].requirement);
+    // Twice invalid: the error carries a diagnostic reason but no model or note text.
+    bodies.length = 0; replies = [invalid, invalid];
+    await assert.rejects(provider.rubric({ title: 'Circuits', depth: 'big-picture', sources: [source] }), (error: unknown) =>
+      error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT' && /schema: items\.0\.requirement/.test(error.detail ?? '') && !(error.detail ?? '').includes('secret'));
+    assert.ok(!JSON.stringify(logged).includes('secret'));
+  } finally {
+    globalThis.fetch = originalFetch; console.warn = warn;
+    if (oldKey === undefined) delete process.env.STEPFUN_API_KEY; else process.env.STEPFUN_API_KEY = oldKey;
+  }
 });

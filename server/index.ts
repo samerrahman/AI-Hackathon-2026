@@ -113,7 +113,7 @@ if (existsSync(dist)) {
 const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
   // A cancelled voice request has no listener left to answer.
   if (res.destroyed || res.headersSent) return;
-  if (error instanceof ApiError) { res.status(error.status).json({ error: error.message, code: error.code }); return; }
+  if (error instanceof ApiError) { res.status(error.status).json({ error: error.message, code: error.code, ...(error.detail ? { detail: error.detail } : {}) }); return; }
   if (error instanceof z.ZodError) { res.status(400).json({ error: 'This request contains missing or invalid study data. Your draft is safe; reopen the notes and try again.', code: 'INVALID_REQUEST' }); return; }
   if (error instanceof multer.MulterError) { res.status(413).json({ error: 'Recordings must be under 12 MB. Try a shorter explanation or type it instead.', code: 'AUDIO_TOO_LARGE' }); return; }
   if (error && typeof error === 'object' && 'type' in error && error.type === 'entity.too.large') { res.status(413).json({ error: 'This collection is too large to process at once. Try fewer pages.' }); return; }

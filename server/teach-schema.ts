@@ -33,7 +33,8 @@ export const judgeSchema = z.object({
 export type JudgeResult = z.infer<typeof judgeSchema>;
 export const stuSchema = z.object({ text: z.string().min(5).max(900), questionStyle: styleSchema });
 export type StuResult = z.infer<typeof stuSchema>;
-const coverTooDetailed = /\d|[=+×÷<>∑∫^]|\b(edge cases?|exception|limitation|deriv|formula|equation|exact|numerical|quantitative|threshold|boundary case)\b/i;
+// Standalone numbers and math symbols mean the gist is asking for exact values; digits inside names (CO2, H2O, 3D) are fine.
+const coverTooDetailed = /(^|[^\p{L}\d])\d+(?:[.,]\d+)?(?![\p{L}\d])|[=+×÷<>∑∫^→]|\b(edge cases?|exception|limitation|deriv|formula|equation|exact|numerical|quantitative|threshold|boundary case)\b/iu;
 export const rubricSchema = z.object({
   coreIdeas: z.array(z.string().min(2).max(100)).min(2).max(6),
   items: z.array(z.object({ ideaIndex: z.number().int().min(0).max(5), stage: stageSchema, requirement: z.string().min(8).max(500), sourceIds })).min(6).max(18),

@@ -52,7 +52,7 @@ export const rubricSchema = z.object({
 });
 export type RubricDraft = z.infer<typeof rubricSchema>;
 export const createTopicSchema = conceptRequestSchema.omit({ mode: true, sessionId: true }).extend({
-  title: z.string().trim().min(2).max(160), depth: depthSchema, mode: z.enum(['live', 'demo']),
+  title: z.string().trim().min(1).max(160), depth: depthSchema, mode: z.enum(['live', 'demo']),
   // No documents means the student chose to just start talking.
   documents: z.array(documentSchema).max(5),
 });

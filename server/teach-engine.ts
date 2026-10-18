@@ -112,17 +112,19 @@ async function stuReply(provider: TeachProvider, input: StuInput) {
 function verifiedRelearnBrief(judge: JudgeResult, state: TeachState, sources: SourceSpan[]) {
   const brief = judge.relearnBrief;
   if (!brief) throw new ApiError(502, 'The re-learn brief was incomplete. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
-  requireReferences(brief.sourceIds, sources);
+  if (sources.length) requireReferences(brief.sourceIds, sources); else brief.sourceIds = [];
   if (!Object.values(state.credited).some(e => e.quote.includes(brief.teacherQuote))) throw new ApiError(502, 'The re-learn brief lacked verified teacher wording. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
   if (state.pastProblems.some(p => p.type === 'wrong') && !brief.correction.trim()) throw new ApiError(502, 'The re-learn brief omitted a needed correction. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
   return brief;
 }
+// Without notes there is nothing to cite; the Judge grades from its own knowledge.
+const sourcesOf = (documents: CreateTopicRequest['documents']) => documents.length ? validateSources(documents) : [];
 export async function createTeachTopic(request: CreateTopicRequest, provider: TeachProvider): Promise<TeachResponse> {
-  const sources = validateSources(request.documents);
+  const sources = sourcesOf(request.documents);
   if (request.mode === 'demo' && !request.sampleId) throw new ApiError(400, 'Choose a bundled sample for a sample session.', 'DEMO_ONLY');
   const generated = await provider.rubric({ title: request.title, depth: request.depth, sources });
   const draft = rubricSchema.parse(generated.data);
-  const rubric = draft.items.map(item => { requireReferences(item.sourceIds, sources); return { ...item, id: randomUUID() }; });
+  const rubric = draft.items.map(item => { if (sources.length) requireReferences(item.sourceIds, sources); return { ...item, sourceIds: sources.length ? item.sourceIds : [], id: randomUUID() }; });
   const topicId = randomUUID();
   const state: TeachState = { version: 1, topicId, scope: scopeFor(request.documents), title: request.title, depth: request.depth,
     sample: request.mode === 'demo', sampleId: request.sampleId, mode: 'teach', rubric, coreIdeas: draft.coreIdeas,
@@ -132,7 +134,7 @@ export async function createTeachTopic(request: CreateTopicRequest, provider: Te
     liveStep5: false };
 }
 export async function runTeachTurn(request: TeachTurnRequest, provider: TeachProvider, debugEnabled = false): Promise<TeachResponse> {
-  const sources = validateSources(request.documents);
+  const sources = sourcesOf(request.documents);
   const state = openTeachState(request.stateToken, request.topicId, request.documents);
   if (request.revision <= state.revision) throw new ApiError(409, 'A newer message already changed this topic. Reload your saved session.', 'STALE_TURN');
   if (state.transcript.some(m => m.id === request.messageId || m.id === request.turnId)) throw new ApiError(409, 'This message has already been used. Retry with your latest saved session.', 'STALE_TURN');

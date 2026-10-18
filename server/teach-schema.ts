@@ -9,7 +9,8 @@ export const stageSchema = z.enum(['cover', 'explain', 'connect']);
 export const problemTypeSchema = z.enum(['wrong', 'vague', 'missing_step', 'undefined_term', 'off_topic']);
 export const styleSchema = z.enum(['literal', 'analogy', 'boundary', 'causal', 'definition', 'contrast', 'sequence', 'example', 'what_if']);
 const id = z.string().min(1).max(180);
-const sourceIds = z.array(id).min(1).max(20);
+// Empty only for topics taught without notes; the engine requires real citations whenever notes exist.
+const sourceIds = z.array(id).max(20);
 const evidenceSchema = z.object({ rubricItemId: id, teacherMessageId: id, quote: z.string().min(1).max(1200) });
 const anchoredSchema = z.object({ teacherMessageId: id, anchorQuote: z.string().min(1).max(500) });
 export const focusSchema = anchoredSchema.extend({
@@ -49,9 +50,11 @@ export const rubricSchema = z.object({
 export type RubricDraft = z.infer<typeof rubricSchema>;
 export const createTopicSchema = conceptRequestSchema.omit({ mode: true, sessionId: true }).extend({
   title: z.string().trim().min(2).max(160), depth: depthSchema, mode: z.enum(['live', 'demo']),
+  // No documents means the student chose to just start talking.
+  documents: z.array(documentSchema).max(5),
 });
 export const teachTurnSchema = z.object({
-  topicId: id, stateToken: z.string().min(20).max(300_000), documents: z.array(documentSchema).min(1).max(5),
+  topicId: id, stateToken: z.string().min(20).max(300_000), documents: z.array(documentSchema).max(5),
   turnId: id, revision: z.number().int().min(1), messageId: id, text: z.string().trim().min(1).max(12_000),
 });
 export type TeachTurnRequest = z.infer<typeof teachTurnSchema>;

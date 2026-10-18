@@ -41,6 +41,9 @@ cd agent && ../.venv/bin/python agent.py
 
 1. Open the **Agent inspector** link printed on startup → **Connect** → **Mailbox**
    (logged in to agentverse.ai). The agent is now registered on Agentverse.
+   Or skip the inspector: create an API key on agentverse.ai (profile → API Keys), put
+   `AGENTVERSE_API_KEY=...` in `.env`, and with the agent running, run
+   `../.venv/bin/python connect_mailbox.py`.
 2. On Agentverse, check the agent's profile (README is `AGENT_README.md`) and that it shows
    *AgentChatProtocol*.
 3. Go to [asi1.ai](https://asi1.ai), and chat with the agent (search "Teach Stu", or open it

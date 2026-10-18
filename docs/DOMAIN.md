@@ -1,18 +1,19 @@
 # Public domain
 
-The study companion website is hosted at **https://brodidnot.study** by Firebase Hosting. Its Firebase project and Hosting site are both `ai-la-hackathon-2026`. The Firebase-provided `web.app` and `firebaseapp.com` addresses load the same Hosting release, then redirect browsers to `brodidnot.study`.
+Teach Stu is served by **Vercel** (project `ai-hackathon-2026`) at **https://www.brodidnot.study**. The bare domain `https://brodidnot.study` permanently redirects (308) to `www`. The Vercel address `https://ai-hackathon-2026-two.vercel.app` serves the same Production deployment.
 
-The domain is registered at Porkbun, which manages its DNS. For the root domain, Porkbun's **Host** field is blank:
+The domain is registered at Porkbun, which manages its DNS:
 
 | Type | Host | Value | Purpose |
 | --- | --- | --- | --- |
-| A | blank | `199.36.158.100` | Route the website to Firebase Hosting |
-| TXT | blank | `hosting-site=ai-la-hackathon-2026` | Prove ownership and allow certificate renewal |
+| A | blank | `76.76.21.21` | Route the bare domain to Vercel |
+| CNAME | `www` | `cname.vercel-dns.com` | Route `www` to Vercel |
+| TXT | blank | `hosting-site=ai-la-hackathon-2026` | Left over from Firebase Hosting; harmless, safe to delete |
 
-Keep the TXT record. Do not add other root A or AAAA records pointing to another host. The `www` subdomain has not been connected; this setup covers `brodidnot.study` only.
+Do not add other root A/AAAA records or other `www` records; they make Vercel report an invalid configuration. Both domains are configured in Vercel under **Settings → Domains**, which also issues the HTTPS certificates. No Porkbun or Vercel credentials belong in this repository.
 
-The custom-domain connection is configured in the Firebase Hosting project and the records are configured at Porkbun. `firebase.json` deploys the website but does not create or update either service's domain settings. No Porkbun or Firebase credentials belong in this repository.
+Vercel needs `STEPFUN_API_KEY` and a stable random `SESSION_SECRET` in its Production environment variables. Production deploys from `main`; a preview can be promoted from the Vercel dashboard while a PR waits for review.
 
-Firebase's generated addresses cannot be removed from the default Hosting site. The redirect in `index.html` makes `brodidnot.study` the browser-facing address; it is a browser redirect, so direct HTTP requests to Firebase's addresses still receive the site's HTML. Saved notes are stored separately by browsers for each domain and do not transfer automatically.
+History: the site was first a static Firebase Hosting build (`ai-la-hackathon-2026.web.app`), which could not run the `/api` server without a paid plan. On 2026-10-18 DNS moved to Vercel. The Firebase hostnames still redirect browsers to `brodidnot.study` via the script in `index.html`.
 
-Verified on 2026-10-17: Porkbun published the A and TXT records above, and `https://brodidnot.study` returned HTTP 200. The Firebase Hosting build serves Lucy's Teach Stu frontend as a preview with local note browsing. Interactive study, sample conversations, and voice still require the Express API to be deployed.
+Verified on 2026-10-18: Porkbun's nameservers and 1.1.1.1 returned the A and CNAME records above, `https://www.brodidnot.study/api/health` returned `{"ok":true}` from Vercel with a valid certificate, and `https://brodidnot.study` returned a 308 to `www`.

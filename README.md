@@ -31,15 +31,15 @@ Open **http://127.0.0.1:5173**. Vite proxies `/api` to the Express server on loo
 
 ## Public deployment
 
-The public address is [brodidnot.study](https://brodidnot.study). Firebase Hosting currently serves a static preview for free. The full site uses Vercel's Vite hosting and a same-origin Express function; the Vercel project needs server-side `STEPFUN_API_KEY` and a stable random `SESSION_SECRET` in its Production and Preview environment variables. Keep both out of Git and Vite variables. Deploy and verify the Vercel preview before moving the domain's DNS from Firebase to Vercel.
+The live site is **https://www.brodidnot.study** (the bare `brodidnot.study` redirects there), hosted on Vercel Hobby. Vercel builds the Vite frontend and runs the Express API as a same-origin function (`api/index.ts`, configured in `vercel.json`, 180-second maximum per request). Production deploys automatically from `main`.
 
-```sh
-npm ci
-npm run build
-vercel deploy
-```
+The Vercel project needs these server-side environment variables, kept out of Git and never prefixed with `VITE_`:
 
-`vercel.json` sends `/api` requests to the Express function and serves Vite's `dist` files for the rest. Vercel Fluid Compute is enabled with a 180-second maximum request duration. See [docs/DOMAIN.md](docs/DOMAIN.md) for the current Porkbun records; update them to Vercel's project-specific values only after the preview works.
+- `STEPFUN_API_KEY`: the Judge, Stu, and voice all use it.
+- `SESSION_SECRET`: a long random value that must stay the same across deployments so saved sessions remain readable.
+- Optional: `ENABLE_JUDGE_DEBUG=true` to offer the **Show Judge Evidence** setting; `STEPFUN_{RUBRIC,JUDGE,STU}_REASONING_EFFORT` to trade speed for depth (defaults `medium`, `low`, `low`).
+
+See [docs/DOMAIN.md](docs/DOMAIN.md) for the Porkbun DNS records.
 
 ## Start a live topic
 

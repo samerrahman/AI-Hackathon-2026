@@ -11,6 +11,8 @@ interface MisoProps {
   reducedMotion?: boolean;
   /** Click or press Enter to bounce. Turn off for small decorative avatars. */
   interactive?: boolean;
+  /** Bounce on click only, outside the tab order: for repeated avatars such as the ones beside chat messages. */
+  clickOnly?: boolean;
 }
 
 function Face({ state }: { state: MisoState }) {
@@ -24,7 +26,7 @@ function Face({ state }: { state: MisoState }) {
 }
 
 /** A deliberately simple, scalable student companion with stateful expressions. */
-export function Miso({ state = 'neutral', size = 152, reducedMotion = false, interactive = true }: MisoProps) {
+export function Miso({ state = 'neutral', size = 152, reducedMotion = false, interactive = true, clickOnly = false }: MisoProps) {
   const [hidden, setHidden] = useState(() => typeof document !== 'undefined' && document.hidden);
   const bounceTimer = useRef<number | null>(null);
   useEffect(() => {
@@ -42,7 +44,9 @@ export function Miso({ state = 'neutral', size = 152, reducedMotion = false, int
     bounceTimer.current=window.setTimeout(()=>svg.classList.remove('miso-character--bounce'),620);
   };
   return <svg className={`miso-character miso-character--${state}${reducedMotion || hidden ? ' miso-character--still' : ''}`} style={style} viewBox="0 0 120 120" data-state={state}
-    {...(interactive
+    {...(clickOnly
+      ? { role: 'img', 'aria-label': 'Stu', 'data-clickable': true, onClick: (event: React.MouseEvent<SVGSVGElement>) => bounce(event.currentTarget) }
+      : interactive
       ? { role: 'button', tabIndex: 0, 'aria-label': 'Bounce Stu', onClick: (event: React.MouseEvent<SVGSVGElement>) => bounce(event.currentTarget),
           onKeyDown: (event: React.KeyboardEvent<SVGSVGElement>) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); bounce(event.currentTarget); } } }
       : { role: 'img', 'aria-label': 'Stu' })}>

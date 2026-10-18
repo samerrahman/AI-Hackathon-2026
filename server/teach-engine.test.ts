@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SourceSpan, StudyDocument } from '../shared/types.js';
 import { ApiError } from './schema.js';
-import { createTeachTopic, openTeachState, runTeachTurn } from './teach-engine.js';
+import { createTeachTopic, openTeachState, planSources, runJudgeTurn, runTeachTurn } from './teach-engine.js';
 import { DemoTeachProvider } from './teach-demo.js';
-import type { JudgeInput, ModelResult, StuInput, TeachProvider } from './teach-provider.js';
-import { createTopicSchema, rubricSchema, type Depth, type JudgeResult, type RubricDraft, type StuResult } from './teach-schema.js';
+import type { BriefInput, JudgeInput, ModelResult, StuInput, TeachProvider } from './teach-provider.js';
+import { createTopicSchema, rubricSchema, type Depth, type JudgeResult, type RelearnBrief, type RubricDraft, type StuResult } from './teach-schema.js';
 
 process.env.SESSION_SECRET = 'teach-stu-test-only-secret';
 const source: SourceSpan = { id: 'source-1', documentId: 'doc-1', pageIndex: 0,
@@ -21,37 +21,50 @@ const draft: RubricDraft = { coreIdeas: ['circuit', 'current'], items: [
 ] };
 const statement = 'A complete circuit lets current flow from the battery through the lamp, while an open switch breaks that path.';
 function model<T>(data: T, name = 'step-5-preview'): ModelResult<T> { return { data, model: name, durationMs: 12 }; }
+/** The newest teacher message waiting for grading (the transcript also holds Stu's replies). */
+function pendingTeacher(input: JudgeInput) { return input.transcript.find(m => m.id === input.pendingTeacherMessageIds.at(-1))!; }
 function judgeFor(input: JudgeInput, credits: string[] = [], revocations: string[] = [], problems: JudgeResult['problems'] = [], options: Partial<JudgeResult> = {}): JudgeResult {
-  const message = input.transcript.at(-1)!;
-  const quote = message.text.slice(0, 1200);
-  const item = (id: string) => ({ rubricItemId: id, teacherMessageId: message.id, quote });
-  return { credits: credits.map(item), revocations: revocations.map(item), problems,
-    focus: { type: 'vague', teacherMessageId: message.id, anchorQuote: quote.slice(0, 160), instruction: 'ask_clarify' },
-    mistake: null, allSatisfied: false, relearnBrief: null, ...options };
+  const message = pendingTeacher(input);
+  const item = (id: string) => ({ rubricItemId: id, teacherMessageId: message.id, quote: message.text.slice(0, 1200) });
+  return { credits: credits.map(item), revocations: revocations.map(item), problems, ...options };
 }
-function provider(options: { judge?: (input: JudgeInput) => JudgeResult | Promise<JudgeResult>; stu?: (input: StuInput) => StuResult | Promise<StuResult>; rubric?: RubricDraft } = {}) {
-  const calls: string[] = []; const stuInputs: StuInput[] = []; const judgeInputs: JudgeInput[] = [];
+const defaultBrief = (input: BriefInput): RelearnBrief => ({ teacherQuote: input.verifiedTeacherQuotes[0] ?? '',
+  accurateSummary: 'A complete circuit lets current flow, while an open switch breaks that path.', correction: '', quizFeedback: '',
+  quizQuestion: 'What happens when the switch opens?', sourceIds: input.sources.length ? [input.sources[0].id] : [] });
+const alternate = (input: StuInput) => input.lastQuestionStyle === 'example' ? 'causal' as const : 'example' as const;
+function provider(options: { judge?: (input: JudgeInput) => JudgeResult | Promise<JudgeResult>; brief?: (input: BriefInput) => RelearnBrief; stu?: (input: StuInput) => StuResult | Promise<StuResult>; rubric?: RubricDraft } = {}) {
+  const calls: string[] = []; const stuInputs: StuInput[] = []; const judgeInputs: JudgeInput[] = []; const briefInputs: BriefInput[] = [];
   const instance: TeachProvider = {
     judgeModel: 'step-5-preview', stuModel: 'step-3.7-flash',
     rubric: async () => { calls.push('rubric'); return model(options.rubric ?? draft); },
     judge: async input => { calls.push('judge'); judgeInputs.push(input); return model(options.judge ? await options.judge(input) : judgeFor(input)); },
-    stu: async input => { calls.push('stu'); stuInputs.push(input); return model(options.stu ? await options.stu(input) : { text: 'Wait, how does that work in your example?', questionStyle: input.lastQuestionStyle === 'example' ? 'causal' : 'example' }, 'step-3.7-flash'); },
+    brief: async input => { calls.push('brief'); briefInputs.push(input); return model((options.brief ?? defaultBrief)(input)); },
+    stu: async input => { calls.push('stu'); stuInputs.push(input); return model(options.stu ? await options.stu(input) : { text: 'Wait, how does that work in your example?', questionStyle: alternate(input) }, 'step-3.7-flash'); },
   };
-  return { instance, calls, stuInputs, judgeInputs };
+  return { instance, calls, stuInputs, judgeInputs, briefInputs };
 }
+type Provider = ReturnType<typeof provider>;
 async function topic(instance: TeachProvider, depth: Depth = 'big-picture') {
   return createTeachTopic({ title: 'Simple circuits', depth, mode: 'live', documents: [document] }, instance);
 }
-function turn(initial: Awaited<ReturnType<typeof topic>>, text = statement, revision = 1, messageId = `user-${revision}`) {
-  return { topicId: initial.topicId, stateToken: initial.stateToken, documents: [document], turnId: `turn-${revision}`, revision, messageId, text };
+function turn(previous: { topicId: string; stateToken: string }, text = statement, revision = 1, messageId = `user-${revision}`) {
+  return { topicId: previous.topicId, stateToken: previous.stateToken, documents: [document], turnId: `turn-${revision}`, revision, messageId, text };
 }
+const grade = (previous: { topicId: string; stateToken: string }) => ({ topicId: previous.topicId, stateToken: previous.stateToken, documents: [document] });
+/** A full teaching message: Stu's fast reply, then the background grading. */
+async function teachAndGrade(previous: { topicId: string; stateToken: string }, p: Provider, text = statement, revision = 1, messageId = `user-${revision}`, debug = false) {
+  const reply = await runTeachTurn(turn(previous, text, revision, messageId), p.instance);
+  return runJudgeTurn(grade(reply), p.instance, debug);
+}
+const firstItem = (created: { topicId: string; stateToken: string }) => openTeachState(created.stateToken, created.topicId, [document]).rubric[0].id;
 
 test('rubric depth contract keeps cover at gist level and allows deeper explain requirements', async () => {
   assert.equal(rubricSchema.safeParse(draft).success, true);
   assert.equal(rubricSchema.safeParse({ ...draft, items: [{ ...draft.items[0], requirement: 'State the exact equation I = V / R' }, ...draft.items.slice(1)] }).success, false);
   for (const depth of ['big-picture', 'exam-ready', 'expert'] as const) {
     const p = provider(); const created = await topic(p.instance, depth);
-    assert.deepEqual(p.calls, ['rubric']);
+    // Two rubric samples race; the first valid one is used.
+    assert.deepEqual(p.calls, ['rubric', 'rubric']);
     assert.equal(openTeachState(created.stateToken, created.topicId, [document]).depth, depth);
     assert.equal(created.progress.total, 6);
     assert.equal(created.liveStep5, false);
@@ -71,13 +84,16 @@ test('depth is fixed in authenticated state and cannot be changed by a turn requ
   assert.equal(result.depth, 'exam-ready');
 });
 
-test('normal turn calls Judge then Stu; Stu receives no notes, rubric, sources, or credit state', async () => {
-  const p = provider(); const created = await topic(p.instance);
+test('Stu replies first without the Judge; Stu never receives notes, rubric, sources, or credit state; the Judge grades afterwards', async () => {
+  let itemId = '';
+  const p = provider({ judge: input => judgeFor(input, [itemId]) }); const created = await topic(p.instance); itemId = firstItem(created);
   p.calls.length = 0;
-  const result = await runTeachTurn(turn(created), p.instance);
-  assert.deepEqual(p.calls, ['judge', 'stu']);
-  assert.equal(result.liveStep5, true);
-  assert.equal(result.message?.sourceIds, undefined);
+  const reply = await runTeachTurn(turn(created), p.instance);
+  // Two Stu samples race; the first valid one is used.
+  assert.deepEqual(p.calls, ['stu', 'stu']);
+  assert.equal(reply.judgePending, true);
+  assert.equal(reply.progress.credited, 0);
+  assert.equal(reply.message?.sourceIds, undefined);
   assert.deepEqual(Object.keys(p.stuInputs[0]).sort(), ['depth', 'director', 'lastQuestionStyle', 'mode', 'transcript']);
   const payload = JSON.stringify(p.stuInputs[0]);
   assert.ok(!payload.includes(source.text));
@@ -85,107 +101,186 @@ test('normal turn calls Judge then Stu; Stu receives no notes, rubric, sources, 
   assert.ok(!payload.includes('rubric'));
   assert.ok(!payload.includes('credited'));
   assert.ok(!payload.includes('sourceIds'));
+  const graded = await runJudgeTurn(grade(reply), p.instance);
+  assert.deepEqual(p.calls, ['stu', 'stu', 'judge']);
+  assert.deepEqual(p.judgeInputs[0].pendingTeacherMessageIds, ['user-1']);
+  assert.deepEqual(graded.judgedMessageIds, ['user-1']);
+  assert.equal(graded.progress.credited, 1);
+  assert.equal(graded.liveStep5, true);
+  // Nothing left to grade: the Judge is not called again.
+  const idle = await runJudgeTurn(grade(graded), p.instance);
+  assert.deepEqual(p.calls, ['stu', 'stu', 'judge']);
+  assert.equal(idle.progress.credited, 1);
 });
 
-test('Judge failure prevents Stu; Stu failure keeps original state usable for retry', async () => {
-  const brokenJudge = provider({ judge: async () => { throw new ApiError(502, 'Judge failed'); } });
-  const created = await topic(brokenJudge.instance);
-  brokenJudge.calls.length = 0;
-  await assert.rejects(runTeachTurn(turn(created), brokenJudge.instance));
-  assert.deepEqual(brokenJudge.calls, ['judge']);
-  const itemId = openTeachState(created.stateToken, created.topicId, [document]).rubric[0].id;
-  const brokenStu = provider({ judge: input => judgeFor(input, [itemId]), stu: async () => { throw new ApiError(502, 'Stu failed'); } });
+test('a failed grading keeps the message queued for the next grading; a failed Stu reply leaves the old state usable', async () => {
+  let fail = true; let itemId = '';
+  const p = provider({ judge: async input => { if (fail) throw new ApiError(502, 'Judge failed'); return judgeFor(input, [itemId]); } });
+  const created = await topic(p.instance); itemId = firstItem(created);
+  const reply = await runTeachTurn(turn(created), p.instance);
+  await assert.rejects(runJudgeTurn(grade(reply), p.instance));
+  fail = false;
+  const reply2 = await runTeachTurn(turn(reply, 'A second branch can give current another path through the lamp circuit.', 2, 'user-2'), p.instance);
+  const graded = await runJudgeTurn(grade(reply2), p.instance);
+  assert.deepEqual(p.judgeInputs.at(-1)!.pendingTeacherMessageIds, ['user-1', 'user-2']);
+  assert.equal(graded.progress.credited, 1);
+  const brokenStu = provider({ stu: async () => { throw new ApiError(502, 'Stu failed'); } });
   await assert.rejects(runTeachTurn(turn(created), brokenStu.instance));
-  assert.equal(openTeachState(created.stateToken, created.topicId, [document]).credited[itemId], undefined);
-  const fixed = provider({ judge: input => judgeFor(input, [itemId]) });
-  const retry = await runTeachTurn(turn(created), fixed.instance);
-  assert.equal(retry.progress.credited, 1);
+  const retry = await runTeachTurn(turn(created), provider().instance);
+  assert.equal(retry.judgePending, true);
 });
 
-test('only exact current teacher evidence credits; affirmations, fabricated quotes, assistant evidence and unknown IDs are dropped', async () => {
-  const p = provider(); const created = await topic(p.instance);
-  const itemId = openTeachState(created.stateToken, created.topicId, [document]).rubric[0].id;
-  const exact = provider({ judge: input => judgeFor(input, [itemId]) });
-  const credited = await runTeachTurn(turn(created), exact.instance);
+test('a real quote copied with curly quotes, odd spacing, case or a trailing ellipsis still credits; a reworded one does not', async () => {
+  const text = "The lamp's on only when the path is closed — an open switch breaks it.";
+  let ids: string[] = [];
+  const quotes = [' THE LAMP\u2019S ON  only when\nthe path is closed \u2014 an open switch\u2026', 'the lamp works whenever the switch is open'];
+  const p = provider({ judge: input => judgeFor(input, [], [], [], { credits: ids.map((id, i) => ({ rubricItemId: id, teacherMessageId: pendingTeacher(input).id, quote: quotes[i] })) }) });
+  const created = await topic(p.instance);
+  ids = openTeachState(created.stateToken, created.topicId, [document]).rubric.slice(0, 2).map(item => item.id);
+  const graded = await teachAndGrade(created, p, text);
+  assert.equal(graded.progress.credited, 1);
+  assert.ok(openTeachState(graded.stateToken, graded.topicId, [document]).credited[ids[0]]);
+});
+
+test('only exact evidence from the messages being graded credits; affirmations, fabricated quotes, assistant text, old messages and unknown IDs are dropped', async () => {
+  let itemId = '';
+  const exact = provider({ judge: input => judgeFor(input, [itemId]) }); const created = await topic(exact.instance); itemId = firstItem(created);
+  const credited = await teachAndGrade(created, exact);
   assert.equal(credited.progress.credited, 1);
-  const fake = provider({ judge: input => judgeFor(input, [itemId], [], [], { credits: [
-    { rubricItemId: itemId, teacherMessageId: input.currentTeacherMessageId, quote: 'an altered teacher quote' },
-    { rubricItemId: 'unknown-rubric-id', teacherMessageId: input.currentTeacherMessageId, quote: input.transcript.at(-1)!.text },
-    { rubricItemId: itemId, teacherMessageId: 'assistant-1', quote: input.transcript.at(-1)!.text },
-  ] }) });
-  assert.equal((await runTeachTurn(turn(created), fake.instance)).progress.credited, 0);
+  const fake = provider({ judge: input => {
+    const teacher = pendingTeacher(input); const assistant = input.transcript.find(m => m.role === 'assistant')!;
+    return judgeFor(input, [], [], [], { credits: [
+      { rubricItemId: itemId, teacherMessageId: teacher.id, quote: 'an altered teacher quote' },
+      { rubricItemId: 'unknown-rubric-id', teacherMessageId: teacher.id, quote: teacher.text },
+      { rubricItemId: itemId, teacherMessageId: assistant.id, quote: assistant.text },
+    ] });
+  } });
+  assert.equal((await teachAndGrade(created, fake)).progress.credited, 0);
   const affirm = provider({ judge: input => judgeFor(input, [itemId]) });
-  assert.equal((await runTeachTurn(turn(created, 'Yes, exactly'), affirm.instance)).progress.credited, 0);
+  assert.equal((await teachAndGrade(created, affirm, 'Yes, exactly')).progress.credited, 0);
+  // A message that was already graded cannot be re-used as new evidence.
+  const secondItem = openTeachState(created.stateToken, created.topicId, [document]).rubric[1].id;
+  const stale = provider({ judge: input => judgeFor(input, [], [], [], { credits: [{ rubricItemId: secondItem, teacherMessageId: 'user-1', quote: statement }] }) });
+  assert.equal((await teachAndGrade(credited, stale, 'Current also needs a battery to push it around.', 2, 'user-2')).progress.credited, 1);
 });
 
-test('contradiction revokes item credit and correction restores it; revocation wins within a turn', async () => {
-  const p = provider(); const created = await topic(p.instance);
-  const itemId = openTeachState(created.stateToken, created.topicId, [document]).rubric[0].id;
-  const initial = await runTeachTurn(turn(created), provider({ judge: input => judgeFor(input, [itemId]) }).instance);
+test('contradiction revokes credit, becomes Stu’s next question in the teacher’s words, and a correction restores it', async () => {
+  let itemId = ''; let mode: 'credit' | 'revoke' = 'credit';
+  const p = provider({ judge: input => mode === 'credit' ? judgeFor(input, [itemId]) : judgeFor(input, [itemId], [itemId], [{ type: 'wrong', description: 'Open switch claim is false',
+    sourceIds: [source.id], affectedRubricItemIds: [itemId], teacherMessageId: pendingTeacher(input).id, quote: pendingTeacher(input).text }]) });
+  const created = await topic(p.instance); itemId = firstItem(created);
+  const initial = await teachAndGrade(created, p);
+  assert.equal(initial.progress.credited, 1);
+  mode = 'revoke';
   const wrong = 'Actually an open switch still lets current flow through the broken path.';
-  const revoking = provider({ judge: input => judgeFor(input, [itemId], [itemId], [{ type: 'wrong', description: 'Open switch claim is false', sourceIds: [source.id], affectedRubricItemIds: [itemId], teacherMessageId: input.currentTeacherMessageId, quote: input.transcript.at(-1)!.text }]) });
-  const down = await runTeachTurn(turn(initial, wrong, 2, 'user-2'), revoking.instance);
+  const down = await teachAndGrade(initial, p, wrong, 2, 'user-2');
   assert.equal(down.progress.credited, 0);
-  const corrected = await runTeachTurn(turn(down, 'I correct that: an open switch breaks the path, so current stops flowing through the lamp.', 3, 'user-3'), provider({ judge: input => judgeFor(input, [itemId]) }).instance);
+  mode = 'credit';
+  const correctedReply = await runTeachTurn(turn(down, 'I correct that: an open switch breaks the path, so current stops flowing through the lamp.', 3, 'user-3'), p.instance);
+  const director = p.stuInputs.at(-1)!.director as { focus: { anchorQuote: string; instruction: string } };
+  assert.equal(director.focus.instruction, 'ask_why');
+  assert.equal(director.focus.anchorQuote, wrong);
+  const corrected = await runJudgeTurn(grade(correctedReply), p.instance);
   assert.equal(corrected.progress.credited, 1);
 });
 
-test('ungrounded focus and mistake are replaced by a generic teacher-grounded direction', async () => {
-  const p = provider(); const created = await topic(p.instance);
-  const bad = provider({ judge: input => judgeFor(input, [], [], [], {
-    focus: { type: 'missing_step', teacherMessageId: input.currentTeacherMessageId, anchorQuote: 'secret wavelength answer', instruction: 'ask_why' },
-    mistake: { teacherMessageId: input.currentTeacherMessageId, anchorQuote: input.transcript.at(-1)!.text, restatement: 'The secret wavelength is violet.' },
-  }) });
-  await runTeachTurn(turn(created, 'Light moves through this thing, I think.'), bad.instance);
-  const director = bad.stuInputs[0].director as { focus: { anchorQuote: string; instruction: string }; mistake: unknown };
+test('an ungrounded problem quote never reaches Stu; he falls back to the newest teacher message', async () => {
+  const p = provider({ judge: input => judgeFor(input, [], [], [{ type: 'missing_step', description: 'Missing wavelength', sourceIds: [], affectedRubricItemIds: [],
+    teacherMessageId: pendingTeacher(input).id, quote: 'secret wavelength answer' }]) });
+  const created = await topic(p.instance);
+  const graded = await teachAndGrade(created, p, 'Light moves through this thing, I think.');
+  await runTeachTurn(turn(graded, 'It goes around the loop.', 2, 'user-2'), p.instance);
+  const director = p.stuInputs.at(-1)!.director as { focus: { anchorQuote: string; instruction: string }; mistake: unknown };
   assert.equal(director.focus.instruction, 'ask_clarify');
-  assert.equal(director.focus.anchorQuote, 'Light moves through this thing, I think.');
+  assert.equal(director.focus.anchorQuote, 'It goes around the loop.');
   assert.equal(director.mistake, null);
+  assert.ok(!JSON.stringify(p.stuInputs).includes('secret wavelength'));
 });
 
-test('completion switches to re-learn with verified teacher wording, grounded brief, and one quiz question', async () => {
-  const p = provider(); const created = await topic(p.instance);
-  const ids = openTeachState(created.stateToken, created.topicId, [document]).rubric.map(item => item.id);
-  const finishing = provider({ judge: input => judgeFor(input, ids, [], [], { relearnBrief: {
-    teacherQuote: statement, accurateSummary: 'A complete circuit lets current flow, while an open switch breaks that path.',
-    correction: '', quizFeedback: '', quizQuestion: 'What happens when the switch opens?', sourceIds: [source.id],
-  } }), stu: input => ({ text: `You explained it as “${(input.director as { brief: { teacherQuote: string } }).brief.teacherQuote}”. A complete circuit carries current. What happens when the switch opens?`, questionStyle: 'example' }) });
-  const result = await runTeachTurn(turn(created), finishing.instance);
-  assert.equal(result.transition, true); assert.equal(result.progress.mode, 'relearn'); assert.equal(result.progress.percent, 100);
-  assert.deepEqual(result.message?.sourceIds, [source.id]);
-  assert.match(JSON.stringify(finishing.stuInputs[0].director), /teacherQuote/);
-  assert.equal((finishing.stuInputs[0].director as { brief: { quizQuestion: string } }).brief.quizQuestion, 'What happens when the switch opens?');
+test('completion switches to re-learn; a second grading call writes the verified brief and Stu’s teach-back; quiz answers run brief then Stu', async () => {
+  let ids: string[] = [];
+  const finishing = provider({ judge: input => judgeFor(input, ids), stu: input => (input.mode === 'relearn'
+    ? { text: `You explained it as “${(input.director as { brief: { teacherQuote: string } }).brief.teacherQuote}”. A complete circuit carries current. What happens when the switch opens?`, questionStyle: alternate(input) }
+    : { text: 'Wait, how does that work in your example?', questionStyle: alternate(input) }) });
+  const created = await topic(finishing.instance); ids = openTeachState(created.stateToken, created.topicId, [document]).rubric.map(item => item.id);
+  const reply = await runTeachTurn(turn(created), finishing.instance);
+  const graded = await runJudgeTurn(grade(reply), finishing.instance);
+  assert.equal(graded.transition, true); assert.equal(graded.next, 'brief'); assert.equal(graded.progress.mode, 'relearn'); assert.equal(graded.progress.percent, 100);
+  assert.equal(graded.message, undefined);
+  const teachBack = await runJudgeTurn(grade(graded), finishing.instance);
+  assert.deepEqual(finishing.calls.slice(-3), ['brief', 'stu', 'stu']);
+  assert.deepEqual(teachBack.message?.sourceIds, [source.id]);
+  assert.ok(finishing.briefInputs[0].verifiedTeacherQuotes.includes(statement));
+  assert.equal(finishing.briefInputs[0].transition, true);
+  assert.equal((finishing.stuInputs.at(-1)!.director as { brief: { quizQuestion: string } }).brief.quizQuestion, 'What happens when the switch opens?');
+  const quiz = await runTeachTurn(turn(teachBack, 'When the switch opens the path breaks, so no current flows.', 2, 'user-2'), finishing.instance);
+  assert.deepEqual(finishing.calls.slice(-3), ['brief', 'stu', 'stu']);
+  assert.equal(quiz.judgePending, undefined);
+  assert.equal(finishing.briefInputs.at(-1)!.transition, false);
+  assert.ok(quiz.message?.text);
 });
 
 test('debug response is sanitized and sample never claims a live Step 5 turn', async () => {
-  const p = provider(); const created = await topic(p.instance);
-  const id = openTeachState(created.stateToken, created.topicId, [document]).rubric[0].id;
-  const debugProvider = provider({ judge: input => judgeFor(input, [id], [], [{ type: 'vague', description: 'Hidden rubric says the lamp must be luminous', sourceIds: [source.id], affectedRubricItemIds: [], teacherMessageId: input.currentTeacherMessageId, quote: input.transcript.at(-1)!.text }]) });
-  const result = await runTeachTurn(turn(created), debugProvider.instance, true);
+  let id = '';
+  const debugProvider = provider({ judge: input => judgeFor(input, [id], [], [{ type: 'vague', description: 'Hidden rubric says the lamp must be luminous', sourceIds: [source.id], affectedRubricItemIds: [],
+    teacherMessageId: pendingTeacher(input).id, quote: pendingTeacher(input).text }]) });
+  const created = await topic(debugProvider.instance); id = firstItem(created);
+  const result = await teachAndGrade(created, debugProvider, statement, 1, 'user-1', true);
   assert.equal(result.debug?.credits[0].itemId, id);
   assert.ok(!JSON.stringify(result.debug).includes('Hidden rubric'));
   assert.ok(!JSON.stringify(result.debug).includes('switch mechanism'));
   assert.equal(result.debug?.models.judge, 'step-5-preview');
   const demo = new DemoTeachProvider('analysis');
   const demoTopic = await createTeachTopic({ title: 'Sample analysis', depth: 'big-picture', mode: 'demo', sampleId: 'analysis', documents: [document] }, demo);
-  const demoTurn = await runTeachTurn(turn(demoTopic, 'A bounded sequence and convergent sequence are different ideas.'), demo);
-  assert.equal(demoTurn.liveStep5, false);
+  const demoReply = await runTeachTurn(turn(demoTopic, 'A bounded sequence and convergent sequence are different ideas.'), demo);
+  const demoGrade = await runJudgeTurn(grade(demoReply), demo);
   assert.equal(demoTopic.liveStep5, false);
+  assert.equal(demoReply.liveStep5, false);
+  assert.equal(demoGrade.liveStep5, false);
 });
 
-test('Stu gets one quiet retry when he breaks his output rules', async () => {
+test('Stu races two samples and keeps the one that follows his rules', async () => {
   let attempts = 0;
   const p = provider({ stu: () => (++attempts === 1
-    ? { text: 'Two questions? Really two?', questionStyle: 'literal' }
+    ? { text: 'One? Two? Three?', questionStyle: 'literal' }
     : { text: 'Wait, how does that work in your example?', questionStyle: 'example' }) });
   const created = await topic(p.instance);
   p.calls.length = 0;
   const result = await runTeachTurn(turn(created), p.instance);
-  assert.deepEqual(p.calls, ['judge', 'stu', 'stu']);
+  assert.deepEqual(p.calls, ['stu', 'stu']);
   assert.equal(result.message?.text, 'Wait, how does that work in your example?');
-  const stillBroken = provider({ stu: () => ({ text: 'Two questions? Really two?', questionStyle: 'literal' }) });
+  const stillBroken = provider({ stu: () => ({ text: 'One? Two? Three?', questionStyle: 'literal' }) });
   const again = await topic(stillBroken.instance);
   await assert.rejects(runTeachTurn(turn(again), stillBroken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
+});
+
+test('two rubric samples race; stray citations are dropped and the first plan that passes is kept', async () => {
+  const stray = { ideaIndex: 0, stage: 'explain' as const, requirement: 'Explain a claim the notes never make', sourceIds: ['invented-id'] };
+  const p = provider(); let samples = 0;
+  p.instance.rubric = async () => { p.calls.push('rubric'); return model(samples++ === 0 ? { ...draft, items: [...draft.items, stray] } : { ...draft, coreIdeas: ['second sample', 'unused'] }); };
+  const created = await topic(p.instance);
+  const state = openTeachState(created.stateToken, created.topicId, [document]);
+  assert.deepEqual(p.calls, ['rubric', 'rubric']);
+  assert.equal(created.progress.total, draft.items.length);
+  assert.ok(!state.rubric.some(item => item.requirement === stray.requirement));
+  assert.deepEqual(state.coreIdeas, draft.coreIdeas);
+  // Both samples broken: a clear, retryable error rather than a half-grounded plan.
+  const broken = provider({ rubric: { ...draft, items: draft.items.map(item => ({ ...item, sourceIds: ['invented-id'] })) } });
+  await assert.rejects(topic(broken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
+});
+
+test('long notes are sampled evenly for the planner, and short notes go through whole', () => {
+  const pages = Array.from({ length: 100 }, (_, index): SourceSpan[] => [
+    { id: `h-${index}`, documentId: 'doc-1', pageIndex: index, text: `Heading ${index}`, quality: 'native', kind: 'heading' },
+    { id: `p-${index}`, documentId: 'doc-1', pageIndex: index, text: `Page ${index} ${'detail '.repeat(300).trim()}`, quality: 'native', kind: 'paragraph' },
+  ]).flat();
+  const planned = planSources(pages, 40_000);
+  assert.ok(planned.reduce((n, span) => n + span.text.length, 0) <= 40_000 + 100);
+  // Every page keeps its heading and the start of its text, under its original id.
+  assert.equal(new Set(planned.map(span => span.pageIndex)).size, 100);
+  assert.equal(planned.filter(span => span.kind === 'heading').length, 100);
+  assert.ok(planned.every(span => pages.find(original => original.id === span.id)?.text.startsWith(span.text.replace(/…$/, ''))));
+  assert.deepEqual(planSources(pages.slice(0, 4), 40_000), pages.slice(0, 4));
 });
 
 test('a topic can be taught without notes; the Judge grades from its own knowledge', async () => {
@@ -194,9 +289,10 @@ test('a topic can be taught without notes; the Judge grades from its own knowled
   const p = provider({ rubric: noNotes, judge: input => { assert.deepEqual(input.sources, []); return judgeFor(input, []); } });
   const created = await createTeachTopic({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [] }, p.instance);
   assert.equal(created.progress.total, 6);
-  const result = await runTeachTurn({ topicId: created.topicId, stateToken: created.stateToken, documents: [], turnId: 'turn-1', revision: 1, messageId: 'user-1', text: statement }, p.instance);
-  assert.deepEqual(p.calls, ['rubric', 'judge', 'stu']);
-  assert.ok(result.message?.text);
+  const reply = await runTeachTurn({ topicId: created.topicId, stateToken: created.stateToken, documents: [], turnId: 'turn-1', revision: 1, messageId: 'user-1', text: statement }, p.instance);
+  await runJudgeTurn({ topicId: created.topicId, stateToken: reply.stateToken, documents: [] }, p.instance);
+  assert.deepEqual(p.calls, ['rubric', 'rubric', 'stu', 'stu', 'judge']);
+  assert.ok(reply.message?.text);
   // When notes exist, every rubric item must still cite them.
   await assert.rejects(createTeachTopic({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [document] }, provider({ rubric: noNotes }).instance));
 });

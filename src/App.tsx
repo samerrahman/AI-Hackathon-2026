@@ -14,15 +14,20 @@ type Mode = 'teach' | 'relearn';
 type Screen = 'welcome' | 'study' | 'recap';
 type Progress = { total: number; credited: number; percent: number; mode: Mode };
 type DebugEvidence = { credits: { itemId: string; quote: string }[]; revocations: { itemId: string; quote: string }[];
-  problems: { type: string; description: string }[]; focus: { type: string; anchorQuote: string; instruction: string };
+  problems: { type: string; description: string }[]; focus?: { type: string; anchorQuote: string; instruction: string };
   mistakeAccepted: boolean; models: { judge: string; stu: string }; durationMs: { judge: number; stu: number } };
-type Message = { id: string; role: 'user' | 'assistant'; text: string; sourceIds?: string[]; debug?: DebugEvidence };
-type TopicResponse = { topicId: string; stateToken: string; progress: Progress; message?: Message; transition?: boolean; liveStep5: boolean; debug?: DebugEvidence };
+type Message = { id: string; role: 'user' | 'assistant'; text: string; sourceIds?: string[]; debug?: DebugEvidence;
+  /** Shown in the thread at once, before the server confirms it with Stu's reply. Never saved. */
+  pending?: boolean };
+type TopicResponse = { topicId: string; stateToken: string; progress: Progress; message?: Message; transition?: boolean; liveStep5: boolean; debug?: DebugEvidence;
+  judgePending?: boolean; judgedMessageIds?: string[]; next?: 'brief' };
 type SavedSession = { id: string; name: string; depth: Depth; mode: 'live' | 'demo'; sampleId?: 'analysis' | 'research';
   documents: StudyDocument[]; stateToken: string; history: Message[]; progress: Progress; liveStep5: boolean;
   documentId: string; pageIndex: number; draft: string; audioOutput: boolean; status: 'active' | 'paused' | 'completed'; updatedAt: number;
   /** Stu's reaction to the last teaching turn, derived only from the overall progress change. */
-  mood?: CharacterState };
+  mood?: CharacterState;
+  /** Stu has answered but the Step 5 Judge has not graded the latest explanation yet. */
+  judgePending?: boolean };
 type FileRow = { id: string; file?: File; title: string; text?: string; size: number; state: string };
 const uid = () => crypto.randomUUID();
 const depthNames: Record<Depth, string> = { 'big-picture': 'Big picture', 'exam-ready': 'Exam ready', expert: 'Expert' };
@@ -35,8 +40,15 @@ const fallbackConfig: AppConfig = { liveAvailable: false, voiceAvailable: false,
 const hostingPreview = import.meta.env.VITE_HOSTING_ONLY === 'true';
 const previewToken = 'hosting-preview';
 const plainDocs = (docs: StudyDocument[]) => docs.map(({ blob, ...doc }) => doc);
+/** An unconfirmed message goes back into the box, so a failed, cancelled or reloaded send loses nothing. */
+function unsend(session: SavedSession, ids?: Set<string>): SavedSession {
+  const unsent = session.history.filter(message => message.pending && (!ids || ids.has(message.id)));
+  if (!unsent.length) return session;
+  return { ...session, history: session.history.filter(message => !unsent.includes(message)), draft: [...unsent.map(message => message.text), session.draft.trim()].filter(Boolean).join('\n\n') };
+}
 async function api<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const timeout = AbortSignal.timeout(170000);
+  // Slightly longer than the server's 180 s function limit so the server's own error message arrives.
+  const timeout = AbortSignal.timeout(185000);
   const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
   const data = await response.json().catch(() => ({ error: 'The connection was interrupted. Your words are still here.' }));
   if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Stu could not finish this request. Please retry.');
@@ -54,9 +66,8 @@ function JudgePanel({ debug }: { debug: DebugEvidence }) {
     {debug.credits.map((credit, index) => <p key={`credit-${index}`}><strong>Credited {credit.itemId}</strong> · “{credit.quote}”</p>)}
     {debug.revocations.map((revoke, index) => <p key={`revoke-${index}`}><strong>Revoked {revoke.itemId}</strong> · “{revoke.quote}”</p>)}
     {debug.problems.map((problem, index) => <p key={`problem-${index}`}><strong>{problem.type}</strong> · {problem.description}</p>)}
-    <p>Focus: {debug.focus.instruction} · “{debug.focus.anchorQuote}”</p>
-    <p>Proposed mistake: {debug.mistakeAccepted ? 'accepted' : 'rejected or absent'}</p>
-    <small>Judge {debug.models.judge} · {debug.durationMs.judge} ms / Stu {debug.models.stu} · {debug.durationMs.stu} ms</small>
+    {debug.focus && <p>Next question for Stu: {debug.focus.instruction} · “{debug.focus.anchorQuote}”</p>}
+    <small>Judge {debug.models.judge} · {debug.durationMs.judge} ms</small>
   </details>;
 }
 export default function App() {
@@ -69,6 +80,11 @@ export default function App() {
   const [depth, setDepth] = useState<Depth>('big-picture');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Background grading by the Step 5 Judge, separate from Stu's reply so typing never cancels it.
+  const [judging, setJudging] = useState(false);
+  const [waitingForJudge, setWaitingForJudge] = useState(false);
+  const [judgeError, setJudgeError] = useState('');
+  const judgeRun = useRef<Promise<void> | null>(null);
   const [processing, setProcessing] = useState('');
   const [modal, setModal] = useState<'sample' | 'paste' | 'settings' | 'how' | 'delete' | 'expressions' | null>(null);
   const [expression, setExpression] = useState<CharacterState>('neutral');
@@ -87,20 +103,28 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const thread = useRef<HTMLDivElement>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
+  const [titleMissing, setTitleMissing] = useState(false);
   const voice = useVoice({ enabled: config.voiceAvailable, onTranscript: text => { patch({ draft: [sessionRef.current?.draft, text].filter(Boolean).join(' ') }); editor.current?.focus(); }, onError: setError });
   useEffect(() => {
     if (!hostingPreview) fetch('/api/config').then(response => { if (!response.ok) throw new Error(); return response.json(); }).then(setConfig).catch(() => setError('The study server is unavailable. Please reload in a moment.'));
     loadSession<SavedSession>().then(value => { if (value?.stateToken && value?.progress && (hostingPreview ? value.stateToken === previewToken : value.stateToken !== previewToken)) setSaved(value); }).catch(() => setError('Local storage is unavailable. This session may not survive a refresh.'));
   }, []);
   useEffect(() => { const breakpoint = window.matchMedia('(min-width: 1191px)'); const changed = () => setSidebar(breakpoint.matches); breakpoint.addEventListener('change', changed); return () => breakpoint.removeEventListener('change', changed); }, []);
-  useEffect(() => { if (!session) return; setSaveState('Saving…'); saveQueue.current = saveQueue.current.then(() => saveSession(session)).then(() => { setSaved(session); setSaveState('Saved on this device'); }).catch(() => setSaveState('Could not save — keep this tab open')); }, [session]);
+  useEffect(() => { if (!session) return; const settled = unsend(session); setSaveState('Saving…'); saveQueue.current = saveQueue.current.then(() => saveSession(settled)).then(() => { setSaved(settled); setSaveState('Saved on this device'); }).catch(() => setSaveState('Could not save — keep this tab open')); }, [session]);
   function patch(update: Partial<SavedSession>) { setSession(current => current ? { ...current, ...update, updatedAt: Date.now() } : current); }
-  function interrupt() { gate.current.cancel(); setBusy(false); voice.cancelRecording(); voice.stopPlayback(); }
-  function navigate(documentId: string, pageIndex: number) { interrupt(); patch({ documentId, pageIndex }); setSelection(null); setHighlights([]); }
+  function interrupt() {
+    gate.current.cancel(); setBusy(false); setWaitingForJudge(false); voice.cancelRecording(); voice.stopPlayback();
+    const current = sessionRef.current; const restored = current && unsend(current);
+    if (restored && restored !== current) { setSession(restored); sessionRef.current = restored; }
+  }
+  // Reading the notes leaves a reply in flight alone; only voice stops.
+  function stopVoice() { voice.cancelRecording(); voice.stopPlayback(); }
+  function navigate(documentId: string, pageIndex: number) { stopVoice(); patch({ documentId, pageIndex }); setSelection(null); setHighlights([]); }
   function showSources(ids: string[]) {
     const current = sessionRef.current; if (!current) return;
     const span = current.documents.flatMap(document => document.spans).find(item => ids.includes(item.id));
-    if (span) { interrupt(); patch({ documentId: span.documentId, pageIndex: span.pageIndex }); setHighlights(ids); setTab('notes'); setSidebar(false); if (screen === 'recap') setScreen('study'); }
+    if (span) { stopVoice(); patch({ documentId: span.documentId, pageIndex: span.pageIndex }); setHighlights(ids); setTab('notes'); setSidebar(false); if (screen === 'recap') setScreen('study'); }
   }
   function sourceLabel(ids: string[]) {
     const current = sessionRef.current ?? saved;
@@ -118,7 +142,12 @@ export default function App() {
   }
   /** talkOnly: no notes; the hidden Judge grades from Step 5 Preview's own knowledge. */
   async function prepare(sampleId?: 'analysis' | 'research', talkOnly = false) {
-    if (!sampleId && !title.trim()) { setError(talkOnly ? 'Give your topic a title, then just start talking.' : 'Give your topic a title first.'); return; }
+    if (!sampleId && !title.trim()) {
+      // Point at the field itself; a banner at the top of the page is easy to miss from the buttons below.
+      // Focus first, then jump: focusing during a smooth scroll cancels it in real browsers.
+      setTitleMissing(true); titleInput.current?.focus({ preventScroll: true }); titleInput.current?.scrollIntoView({ block: 'center' });
+      return;
+    }
     if (talkOnly && hostingPreview) { setError('Talking without notes needs the study server, which this preview does not have.'); return; }
     if (!sampleId && !talkOnly && !rows.length) { setError('Paste notes or upload a text-based PDF first.'); return; }
     interrupt(); const ticket = gate.current.begin(); setError(''); setBusy(true); setModal(null);
@@ -141,7 +170,7 @@ export default function App() {
         setSession(next); sessionRef.current = next; setScreen('study'); setTab('notes'); setSidebar(window.innerWidth >= 1190); setRows([]); setHighlights([]); setSelection(null); setError(errors.join('\n'));
         return;
       }
-      setProcessing(talkOnly ? 'Getting Stu ready…' : 'Building a private study plan…');
+      setProcessing(talkOnly ? 'Getting Stu ready… this can take up to a minute.' : 'Building a private study plan… this can take up to a minute.');
       const result = await api<TopicResponse>('/api/topic', { title: name, depth, documents: plainDocs(docs), mode: sampleId ? 'demo' : 'live', sampleId }, ticket.signal);
       if (!gate.current.current(ticket.revision)) return;
       const next: SavedSession = { id: result.topicId, name, depth, mode: sampleId ? 'demo' : 'live', sampleId, documents: docs,
@@ -153,30 +182,74 @@ export default function App() {
   }
   async function teach() {
     if (hostingPreview) return;
-    const current = sessionRef.current; if (!current?.draft.trim()) return;
+    const start = sessionRef.current; const text = start?.draft.trim();
+    if (!start || !text || start.history.some(message => message.pending)) return;
     voice.cancelRecording(); voice.stopPlayback(); const ticket = gate.current.begin(); const turnId = uid(); const messageId = uid(); setBusy(true); setError('');
+    // The message shows as sent right away; Stu's reply confirms it.
+    const sent: SavedSession = { ...start, history: [...start.history, { id: messageId, role: 'user', text, pending: true }], draft: '', updatedAt: Date.now() };
+    setSession(sent); sessionRef.current = sent;
     try {
-      const result = await api<TopicResponse>('/api/teach', { topicId: current.id, stateToken: current.stateToken, documents: plainDocs(current.documents), turnId, messageId, revision: ticket.revision, text: current.draft.trim() }, ticket.signal);
-      if (!gate.current.current(ticket.revision) || sessionRef.current?.id !== current.id || result.topicId !== current.id) return;
-      const teacher: Message = { id: messageId, role: 'user', text: current.draft.trim(), ...(config.judgeDebugAvailable && result.debug ? { debug: result.debug } : {}) };
-      // Stu's face reacts to the overall bar only, so it never hints at which idea was credited.
-      const mood: CharacterState = result.progress.credited > current.progress.credited ? 'pleased' : result.progress.credited < current.progress.credited || result.progress.mode === 'teach' ? 'puzzled' : 'neutral';
-      const next: SavedSession = { ...sessionRef.current, stateToken: result.stateToken, progress: result.progress, liveStep5: current.mode === 'live' && result.liveStep5, mood,
-        history: [...current.history, teacher, ...(result.message ? [result.message] : [])], draft: '', updatedAt: Date.now() };
+      // The next reply must build on the latest grading, so let a running grading land first.
+      if (judgeRun.current) { setWaitingForJudge(true); await judgeRun.current; setWaitingForJudge(false); }
+      ticket.signal.throwIfAborted();
+      const current = sessionRef.current; if (current?.id !== start.id) return;
+      const result = await api<TopicResponse>('/api/teach', { topicId: current.id, stateToken: current.stateToken, documents: plainDocs(current.documents), turnId, messageId, revision: ticket.revision, text }, ticket.signal);
+      const latest = sessionRef.current;
+      if (!gate.current.current(ticket.revision) || latest?.id !== current.id || result.topicId !== current.id) return;
+      const history = latest.history.map(message => message.id === messageId ? { id: messageId, role: 'user' as const, text } : message);
+      const next: SavedSession = { ...latest, stateToken: result.stateToken, progress: result.progress, liveStep5: latest.liveStep5 || (latest.mode === 'live' && result.liveStep5),
+        judgePending: Boolean(result.judgePending), history: [...history, ...(result.message ? [result.message] : [])], updatedAt: Date.now() };
       setSession(next); sessionRef.current = next;
       if (next.audioOutput && config.voiceAvailable && result.message) void voice.speak(result.message.text);
-    } catch (cause) { if (gate.current.current(ticket.revision)) { patch({ liveStep5: false }); setError(cause instanceof Error ? cause.message : 'The connection was interrupted. Your draft is safe.'); } }
-    finally { if (gate.current.current(ticket.revision)) setBusy(false); }
+      if (result.judgePending) void runJudge();
+    } catch (cause) { if (gate.current.current(ticket.revision)) setError(cause instanceof Error ? cause.message : 'The connection was interrupted. Your words are back in the box.'); }
+    finally {
+      setWaitingForJudge(false);
+      if (gate.current.current(ticket.revision)) setBusy(false);
+      // Still unconfirmed here means it failed or was cancelled: put the words back.
+      const latest = sessionRef.current;
+      if (latest?.id === start.id) { const restored = unsend(latest, new Set([messageId])); if (restored !== latest) { setSession(restored); sessionRef.current = restored; } }
+    }
+  }
+  /** Step 5 Judge grades what Stu already answered; on completion a second call brings Stu's teach-back. */
+  function runJudge(): Promise<void> {
+    if (judgeRun.current) return judgeRun.current;
+    const run = (async () => {
+      setJudging(true); setJudgeError('');
+      try {
+        for (let step = 0; step < 2; step++) {
+          const before = sessionRef.current; if (!before) return;
+          const result = await api<TopicResponse>('/api/judge', { topicId: before.id, stateToken: before.stateToken, documents: plainDocs(before.documents) });
+          const latest = sessionRef.current;
+          // Replies wait for grading, so the token only changes if the user left or started another topic.
+          if (!latest || latest.id !== before.id || latest.stateToken !== before.stateToken) return;
+          // Stu's face reacts to the overall bar only, so it never hints at which idea was credited.
+          const mood: CharacterState = result.progress.credited > latest.progress.credited ? 'pleased' : result.progress.mode === 'teach' ? 'puzzled' : latest.mood ?? 'neutral';
+          const judged = new Set(result.judgedMessageIds ?? []);
+          const history = latest.history.map(message => config.judgeDebugAvailable && result.debug && judged.has(message.id) ? { ...message, debug: result.debug } : message);
+          const next: SavedSession = { ...latest, stateToken: result.stateToken, progress: result.progress, mood, judgePending: result.next === 'brief',
+            liveStep5: latest.liveStep5 || (latest.mode === 'live' && result.liveStep5), history: result.message ? [...history.filter(message => !message.pending), result.message, ...history.filter(message => message.pending)] : history, updatedAt: Date.now() };
+          setSession(next); sessionRef.current = next;
+          if (result.message && next.audioOutput && config.voiceAvailable) void voice.speak(result.message.text);
+          if (result.next !== 'brief') return;
+        }
+      } catch (cause) {
+        // Nothing is lost: the server keeps the message queued and grades it with the next one.
+        setJudgeError(cause instanceof Error ? cause.message : 'Stu could not check that explanation yet.');
+      } finally { setJudging(false); judgeRun.current = null; }
+    })();
+    judgeRun.current = run;
+    return run;
   }
   function pause() { interrupt(); patch({ status: 'paused' }); setScreen('welcome'); setError(''); }
-  function resume() { if (!saved) return; interrupt(); setSession(saved); sessionRef.current = saved; setScreen('study'); setTab(hostingPreview ? 'notes' : 'conversation'); setError(''); }
+  function resume() { if (!saved) return; interrupt(); setSession(saved); sessionRef.current = saved; setScreen('study'); setTab(hostingPreview ? 'notes' : 'conversation'); setError(''); if (saved.judgePending && !hostingPreview) void runJudge(); }
   async function erase() { const id = sessionRef.current?.id ?? saved?.id; if (id && !hostingPreview) void fetch(`/api/session/${id}`, { method: 'DELETE' }).catch(() => {}); interrupt(); setSession(null); sessionRef.current = null; setSaved(null); await saveQueue.current; await deleteSession(); setRows([]); setScreen('welcome'); setModal(null); setError(''); }
   const inWorkspace = screen === 'study';
   const relearn = session?.progress.mode === 'relearn';
   const latest = session?.history.filter(message => message.role === 'assistant').at(-1);
   const modeLabel = relearn ? 'Re-learn' : 'Teaching';
-  const stuState: CharacterState = voice.recording ? 'listening' : voice.speaking ? 'speaking' : busy || voice.transcribing ? 'thinking' : session?.mood ?? 'neutral';
-  const stuCaption = voice.recording ? 'Stu is listening…' : voice.transcribing ? 'Transcribing your explanation…' : voice.speaking ? 'Speaking · AI-generated voice' : busy ? 'Stu is thinking…'
+  const stuState: CharacterState = voice.recording ? 'listening' : voice.speaking ? 'speaking' : busy || waitingForJudge || voice.transcribing ? 'thinking' : session?.mood ?? 'neutral';
+  const stuCaption = voice.recording ? 'Stu is listening…' : voice.transcribing ? 'Transcribing your explanation…' : voice.speaking ? 'Speaking · AI-generated voice' : waitingForJudge ? 'Still thinking about your last explanation…' : busy ? 'Stu is thinking…'
     : (session?.mood && moodCaptions[session.mood]) || (relearn ? 'Your turn to be the student.' : 'Earnest. A little confused.');
   useEffect(() => { const element = thread.current; if (element) element.scrollTop = element.scrollHeight; }, [session?.history.length, busy, tab, inWorkspace]);
   return <div className={`app ${inWorkspace ? 'workspace-app' : ''}`}>
@@ -191,8 +264,8 @@ export default function App() {
       <section className="welcome-hero"><div><h1>Meet Stu.<br /><em>Your new AI student.</em></h1><p>Bring your lecture notes. Explain the ideas to Stu,<br className="desktop-break" /> catch his mix-ups, and make the tricky parts click.</p></div><div className="hero-character"><span className="handwritten">Click Stu. Boing!</span><Miso size={246} state="neutral" /><div className="character-caption"><span className="online-dot" />Curious. Occasionally confused. All ears.</div></div></section>
       <section className={`upload-card ${dragging ? 'dragging' : ''}`} onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); if (!busy) addFiles(Array.from(event.dataTransfer.files)); }}>
         <div className="upload-topline"><span className="section-number">01</span><span>Start with what you’re studying</span><span className="local-note"><ShieldCheck size={14} />No account needed</span></div>
-        <div className="topic-fields"><label>Topic title<input aria-label="Topic title" value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Sequences and convergence" maxLength={160} /></label><label>Teaching depth<select aria-label="Teaching depth" value={depth} onChange={event => setDepth(event.target.value as Depth)}><option value="big-picture">Big picture · gist and plain language</option><option value="exam-ready">Exam ready · precise mechanisms</option><option value="expert">Expert · limitations and formal details</option></select></label><small>Depth stays fixed after teaching starts. Start a new topic to change it.</small></div>
-        <div className="drop-target"><div className="upload-icon"><Upload size={25} strokeWidth={1.5} /></div><h2>A fresh pair of eyes on your notes.</h2><p>Drop your lecture PDFs here, or paste your notes.</p><input ref={fileInput} type="file" multiple accept="application/pdf,.pdf" className="visually-hidden" aria-label="Choose PDF files" onChange={event => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /><div className="upload-buttons"><button className="primary" disabled={busy} onClick={() => fileInput.current?.click()}><Plus size={17} />Choose lecture notes</button><button className="text-button" disabled={busy || rows.length >= config.limits.maxFiles} onClick={() => setModal('paste')}><Pencil size={15} />Paste notes</button></div>{!hostingPreview && <button className="text-button start-talking" disabled={busy} onClick={() => void prepare(undefined, true)}>or just start talking<ArrowRight size={13} /></button>}<small>Text-based PDFs · Up to {config.limits.maxFiles} files · {Math.round(config.limits.maxFileBytes / 1024 / 1024)} MB and {config.limits.maxPages} pages each</small></div>
+        <div className="topic-fields"><label>Topic title<input ref={titleInput} aria-label="Topic title" aria-invalid={titleMissing} aria-describedby={titleMissing ? 'title-missing' : undefined} value={title} onChange={event => { setTitle(event.target.value); setTitleMissing(false); }} placeholder="e.g. Sequences and convergence" maxLength={160} /></label><label>Teaching depth<select aria-label="Teaching depth" value={depth} onChange={event => setDepth(event.target.value as Depth)}><option value="big-picture">Big picture · gist and plain language</option><option value="exam-ready">Exam ready · precise mechanisms</option><option value="expert">Expert · limitations and formal details</option></select></label>{titleMissing && <small id="title-missing" className="field-error">Give your topic a title first, then pick how to start.</small>}<small>Depth stays fixed after teaching starts. Start a new topic to change it.</small></div>
+        <div className="drop-target"><div className="upload-icon"><Upload size={25} strokeWidth={1.5} /></div><h2>A fresh pair of eyes on your notes.</h2><p>Drop your lecture PDFs here, or paste your notes.</p><input ref={fileInput} type="file" multiple accept="application/pdf,.pdf" className="visually-hidden" aria-label="Choose PDF files" onChange={event => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /><div className="upload-buttons"><button className="primary" disabled={busy} onClick={() => fileInput.current?.click()}><Plus size={17} />Choose lecture notes</button><button className="text-button" disabled={busy || rows.length >= config.limits.maxFiles} onClick={() => setModal('paste')}><Pencil size={15} />Paste notes</button></div>{!hostingPreview && <button className="text-button start-talking" disabled={busy} onClick={() => void prepare(undefined, true)}>or just start talking<ArrowRight size={13} /></button>}{busy && processing && !rows.length && <span className="talk-status" role="status"><LoaderCircle className="spin" size={14} />{processing}</span>}<small>Text-based PDFs · Up to {config.limits.maxFiles} files · {Math.round(config.limits.maxFileBytes / 1024 / 1024)} MB and {config.limits.maxPages} pages each</small></div>
         {rows.length > 0 && <div className="file-list">{rows.map(row => <div className="file-row" key={row.id}><FileText size={19} /><div><strong>{row.title}</strong><small>{(row.size / 1024).toFixed(0)} KB · {row.state}</small></div><button className="icon-button" disabled={busy} aria-label={`Remove ${row.title}`} onClick={() => setRows(current => current.filter(item => item.id !== row.id))}><X size={16} /></button></div>)}<div className="prepare-row">{processing ? <span role="status"><LoaderCircle className="spin" size={16} />{processing}</span> : <span>{rows.length} {rows.length === 1 ? 'source' : 'sources'} for this topic.</span>}{busy ? <button className="outline" onClick={() => { interrupt(); setProcessing(''); }}>Cancel processing</button> : <button className="primary" disabled={!title.trim()} onClick={() => void prepare()}>{hostingPreview ? 'Browse notes' : 'Start teaching'}<ArrowRight size={16} /></button>}</div></div>}
         <div className="sample-strip"><span>Just looking around?</span><button className="text-button" disabled={busy} onClick={() => setModal('sample')}>{hostingPreview ? 'Browse sample notes' : 'Try a sample session'}<ArrowRight size={15} /></button><span className="sample-divider">or</span><button className="text-button" disabled={busy} onClick={() => { setExpression('neutral'); setModal('expressions'); }}>Test Stu’s expressions<ArrowRight size={15} /></button></div>
       </section>
@@ -203,7 +276,7 @@ export default function App() {
 
     {inWorkspace && session && <><div className="session-chrome">
       <nav className="session-tabs" aria-label="Session navigation">{!hostingPreview && <button className={tab === 'conversation' ? 'active' : ''} onClick={() => setTab('conversation')}><MessageCircle size={16} />Teach Stu</button>}{session.documents.length > 0 && <button className={tab === 'notes' ? 'active' : ''} onClick={() => setTab('notes')}><BookOpen size={16} />Notes</button>}<button className="session-tab-end" onClick={() => setSidebar(!sidebar)} aria-expanded={sidebar}><Menu size={16} />Topic</button></nav>
-      {!hostingPreview && <div className="top-progress"><div><span>{relearn ? 'RE-LEARN MODE' : 'TEACHING PROGRESS'}</span><strong>{depthNames[session.depth]} · {session.progress.percent}% taught</strong></div><progress aria-label="Overall topic progress" value={session.progress.credited} max={session.progress.total || 1} /></div>}
+      {!hostingPreview && <div className="top-progress"><div><span>{relearn ? 'RE-LEARN MODE' : 'TEACHING PROGRESS'}</span><strong>{depthNames[session.depth]} · {session.progress.percent}% taught{judging ? ' · checking your explanation…' : ''}</strong></div><progress aria-label="Overall topic progress" value={session.progress.credited} max={session.progress.total || 1} />{judgeError && !judging && <p className="judge-retry" role="status">Couldn’t check your last explanation yet ({judgeError}) It will be checked with your next message. <button className="text-button" onClick={() => void runJudge()}>Check now</button></p>}</div>}
     </div>
       {relearn && <div className="transition-note" role="status">You taught Stu the whole topic. Now he’ll teach it back.</div>}
       <div className={`workspace focused-workspace ${sidebar ? 'sidebar-open' : ''}`}>
@@ -213,8 +286,8 @@ export default function App() {
         {tab === 'notes' ? <section className="notes-pane mobile-active" aria-label="Lecture notes"><div className="notes-heading"><span className="eyebrow">THE NOTES, RIGHT BESIDE YOU</span><span><FileText size={13} />Original source</span></div><DocumentViewer documents={session.documents} documentId={session.documentId} pageIndex={session.pageIndex} onNavigate={navigate} highlightIds={highlights} onSelection={setSelection} selection={selection} />{selection && <div className="selection-bar"><span>“{selection.text.slice(0, 90)}{selection.text.length > 90 ? '…' : ''}”</span><button className="icon-button" aria-label="Clear passage selection" onClick={() => setSelection(null)}><X size={15} /></button></div>}<div className="notes-foot">{!hostingPreview && <button className="text-button" onClick={() => setTab('conversation')}><ArrowLeft size={13} />Back to Stu</button>}<span>Your original stays unchanged.</span></div></section>
           : <main className="teaching-chat" aria-label="Teach Stu conversation">
             <div className="chat-header"><div className="chat-stu"><Miso size={78} state={stuState} /><div><span className="eyebrow"><span className="online-dot" /> {relearn ? 'STU TEACHES BACK' : 'YOU’RE TEACHING STU'}</span><strong>{session.name}</strong><small className="character-state">{stuCaption}</small></div></div><button className="icon-button" aria-label={session.audioOutput ? 'Mute spoken responses' : 'Enable spoken responses'} onClick={() => { voice.stopPlayback(); if (!config.voiceAvailable) { setError('Spoken responses are unavailable right now. Typing is fully available.'); return; } patch({ audioOutput: !session.audioOutput }); }}>{session.audioOutput ? <Volume2 size={17} /> : <VolumeX size={17} />}</button></div>
-            <div className="chat-thread" ref={thread} aria-live="polite">{session.history.map(message => <div className={`message-row ${message.role === 'user' ? 'student-message' : 'stu-message'}`} key={message.id}>{message.role === 'assistant' && <Miso size={42} interactive={false} state={message.id === latest?.id ? stuState : 'neutral'} />}<div className="message-wrap"><span>{message.role === 'user' ? 'You' : 'Stu'}</span><div className="message-bubble"><RichText text={message.text} /></div>{relearn && message.role === 'assistant' && message.sourceIds?.length ? citations(message.sourceIds) : null}{showJudgeEvidence && message.role === 'user' && message.debug && <JudgePanel debug={message.debug} />}</div></div>)}
-              {busy && <div className="message-row stu-message pending-message"><Miso size={42} interactive={false} state="thinking" /><div className="message-wrap"><span>Stu</span><div className="message-bubble" aria-label="Stu is thinking"><i /><i /><i /></div></div></div>}</div>
+            <div className="chat-thread" ref={thread} aria-live="polite">{session.history.map(message => <div className={`message-row ${message.role === 'user' ? 'student-message' : 'stu-message'}`} key={message.id}>{message.role === 'assistant' && <Miso size={42} clickOnly state={message.id === latest?.id ? stuState : 'neutral'} />}<div className="message-wrap"><span>{message.role === 'user' ? 'You' : 'Stu'}</span><div className="message-bubble"><RichText text={message.text} /></div>{relearn && message.role === 'assistant' && message.sourceIds?.length ? citations(message.sourceIds) : null}{showJudgeEvidence && message.role === 'user' && message.debug && <JudgePanel debug={message.debug} />}</div></div>)}
+              {(busy || waitingForJudge) && <div className="message-row stu-message pending-message"><Miso size={42} clickOnly state="thinking" /><div className="message-wrap"><span>Stu</span><div className="message-bubble" aria-label="Stu is thinking"><i /><i /><i /></div></div></div>}</div>
             {session.mode === 'live' && !config.liveAvailable && <p className="inline-notice">Live study needs a server-side StepFun key. Your notes remain available.</p>}
             <div className="response-area chat-composer">
               {voice.recording ? <div className="recording-controls"><span className="recording-label"><span />Listening… {Math.floor(voice.recordingSeconds / 60)}:{String(voice.recordingSeconds % 60).padStart(2, '0')} / 3:00</span><button className="primary" onClick={() => void voice.stopRecording()}><Square size={14} />I’m done</button><button className="text-button" onClick={voice.cancelRecording}>Cancel</button></div> : <button className="primary mic-button" disabled={busy || voice.transcribing || voice.requestingPermission} onClick={() => { setError(''); void voice.startRecording(); }}><Mic size={18} />Start explaining<span>↗</span></button>}
@@ -223,7 +296,7 @@ export default function App() {
               {config.voiceAvailable && <small className="voice-limit">Up to 3 minutes per turn · review before sending</small>}
               {latest && config.voiceAvailable && !voice.speaking && <button className="text-button" onClick={() => void voice.speak(latest.text)}><Volume2 size={13} />Read aloud</button>}
               <button className="type-label text-button" onClick={() => { voice.cancelRecording(); editor.current?.focus(); }}><Keyboard size={15} />Type instead<span>or edit your transcript</span></button>
-              <form className="answer-form" onSubmit={event => { event.preventDefault(); if (session.draft.trim()) void teach(); }}><textarea ref={editor} aria-label="Your explanation" placeholder={relearn ? 'Answer Stu’s question in your own words…' : 'In my own words…'} value={session.draft} onChange={event => { if (busy || voice.recording || voice.transcribing || voice.requestingPermission) interrupt(); patch({ draft: event.target.value }); }} onKeyDown={event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && session.draft.trim()) { event.preventDefault(); void teach(); } }} /><div><span>{voice.transcribing ? 'Review the transcript before sending.' : 'Your words are the lesson.'}</span><button className="send-button" aria-label="Send explanation" disabled={busy || !session.draft.trim()}><Send size={16} /></button></div></form>
+              <form className="answer-form" onSubmit={event => { event.preventDefault(); if (session.draft.trim() && !busy) void teach(); }}><textarea ref={editor} aria-label="Your explanation" placeholder={relearn ? 'Answer Stu’s question in your own words…' : 'In my own words…'} value={session.draft} onChange={event => { if (voice.recording || voice.transcribing || voice.requestingPermission) voice.cancelRecording(); patch({ draft: event.target.value }); }} onKeyDown={event => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); if (session.draft.trim() && !busy) void teach(); }} /><div><span>{voice.transcribing ? 'Review the transcript before sending.' : 'Enter to send · Shift+Enter for a new line.'}</span><button className="send-button" aria-label="Send explanation" disabled={busy || !session.draft.trim()}><Send size={16} /></button></div></form>
               {busy && <button className="text-button" onClick={interrupt}><Square size={12} />Cancel response</button>}
               <div className="help-actions">{session.documents.length > 0 && <button onClick={() => setTab('notes')}><BookOpen size={16} />Look at my notes<ChevronRight size={13} /></button>}<button onClick={() => setSidebar(!sidebar)}><Lightbulb size={16} />About this topic<ChevronRight size={13} /></button></div>
               <div className="companion-footer"><span>One idea at a time.</span><span>No rush.</span></div>

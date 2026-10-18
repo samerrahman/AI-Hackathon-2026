@@ -23,17 +23,20 @@ export const relearnBriefSchema = z.object({
   correction: z.string().max(1200), quizFeedback: z.string().max(1000),
   quizQuestion: z.string().min(5).max(600), sourceIds,
 });
+// The per-turn Judge only grades: credits, revocations and problems. Keeping its job small keeps
+// Step 5 Preview's thinking short; Stu chooses his own questions and the re-learn brief is a separate call.
 export const judgeSchema = z.object({
   credits: z.array(evidenceSchema).max(30), revocations: z.array(evidenceSchema).max(30),
   problems: z.array(z.object({ type: problemTypeSchema, description: z.string().min(1).max(220), sourceIds: z.array(id).max(10),
     affectedRubricItemIds: z.array(id).max(18), teacherMessageId: id, quote: z.string().min(1).max(1200) })).max(12),
-  focus: focusSchema.nullable(), mistake: mistakeSchema.nullable(), allSatisfied: z.boolean(),
-  relearnBrief: relearnBriefSchema.nullable(),
 });
 export type JudgeResult = z.infer<typeof judgeSchema>;
+export type RelearnBrief = z.infer<typeof relearnBriefSchema>;
+export type Focus = z.infer<typeof focusSchema>;
 export const stuSchema = z.object({ text: z.string().min(5).max(900), questionStyle: styleSchema });
 export type StuResult = z.infer<typeof stuSchema>;
-const coverTooDetailed = /\d|[=+×÷<>∑∫^]|\b(edge cases?|exception|limitation|deriv|formula|equation|exact|numerical|quantitative|threshold|boundary case)\b/i;
+// Standalone numbers and math symbols mean the gist is asking for exact values; digits inside names (CO2, H2O, 3D) are fine.
+const coverTooDetailed = /(^|[^\p{L}\d])\d+(?:[.,]\d+)?(?![\p{L}\d])|[=+×÷<>∑∫^→]|\b(edge cases?|exception|limitation|deriv|formula|equation|exact|numerical|quantitative|threshold|boundary case)\b/iu;
 export const rubricSchema = z.object({
   coreIdeas: z.array(z.string().min(2).max(100)).min(2).max(6),
   items: z.array(z.object({ ideaIndex: z.number().int().min(0).max(5), stage: stageSchema, requirement: z.string().min(8).max(500), sourceIds })).min(6).max(18),
@@ -49,7 +52,7 @@ export const rubricSchema = z.object({
 });
 export type RubricDraft = z.infer<typeof rubricSchema>;
 export const createTopicSchema = conceptRequestSchema.omit({ mode: true, sessionId: true }).extend({
-  title: z.string().trim().min(2).max(160), depth: depthSchema, mode: z.enum(['live', 'demo']),
+  title: z.string().trim().min(1).max(160), depth: depthSchema, mode: z.enum(['live', 'demo']),
   // No documents means the student chose to just start talking.
   documents: z.array(documentSchema).max(5),
 });
@@ -58,4 +61,7 @@ export const teachTurnSchema = z.object({
   turnId: id, revision: z.number().int().min(1), messageId: id, text: z.string().trim().min(1).max(12_000),
 });
 export type TeachTurnRequest = z.infer<typeof teachTurnSchema>;
+// Background grading of the teacher messages a fast Stu reply has not had judged yet.
+export const judgeTurnSchema = z.object({ topicId: id, stateToken: z.string().min(20).max(300_000), documents: z.array(documentSchema).max(5) });
+export type JudgeTurnRequest = z.infer<typeof judgeTurnSchema>;
 export type CreateTopicRequest = z.infer<typeof createTopicSchema>;

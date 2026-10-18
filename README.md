@@ -4,6 +4,20 @@
 
 Teach Stu preserves the React study workspace, PDF viewer, source navigation, local session saving, keyboard and reduced-motion behavior, sample demos, and optional voice. It uses model inference and session-specific state. It does **not** train or fine-tune a model, and Stu does not permanently learn from users.
 
+## How Teach Stu uses Step 5 Preview
+
+Every live topic calls StepFun's **`step-5-preview`**: once to build the private rubric from your notes, then on every message you send, before Stu is allowed to reply. If that call fails, Stu does not answer and your draft stays in the box for a retry.
+
+| Step | Model | What it does | What it sees |
+| --- | --- | --- | --- |
+| Rubric | `step-5-preview` | Turns your notes into hidden *cover → explain → connect* requirements at the depth you chose | Your notes, title, depth |
+| Judge (every turn) | `step-5-preview` | Pessimistically grades your latest message; every credit must quote your exact words, which the server re-checks | Relevant notes, rubric, conversation |
+| Stu (every turn) | `step-3.7-flash` | The visible, deliberately dim student: one short question, sometimes a planted mix-up for you to catch | Conversation and a sanitized note from the Judge, never the notes or rubric |
+| Re-learn | `step-5-preview` → `step-3.7-flash` | After you finish, the Judge writes a source-grounded recap and quiz; Stu delivers it | Verified teacher quotes, notes |
+| Voice (optional) | `stepaudio-3-asr-max`, `stepaudio-3-tts` | Transcribes your spoken explanation for you to review before sending; reads Stu's replies aloud | Your recording; Stu's reply text |
+
+The Judge runs on Step 5 Preview because grading is the part that has to be right. Stu runs on a faster model so replies come back quickly, and he can't leak answers he was never given. You stay in control: you pick the depth, review every transcript before it's sent, can pause, end, or delete a session, and the **Step 5 Preview · Live** badge only appears after a turn whose Judge actually used `step-5-preview`. Sample sessions are labeled **Sample demo** and use fixed responses instead of a model.
+
 ## Run locally
 
 Use Node.js 22.13 or newer:

@@ -33,10 +33,24 @@ async function mockVoice(page: Page) {
     navigator.mediaDevices.getUserMedia = async () => fixture.deferPermission
       ? new Promise(resolve => { fixture.releasePermission = () => resolve(makeStream()); })
       : makeStream();
+    // A real 48 kHz stereo PCM recording: the hook decodes it and re-encodes 16 kHz mono WAV for StepFun.
+    const recorded = new ArrayBuffer(44 + 12000 * 4);
+    const header = new DataView(recorded);
+    for (const [offset, text] of [[0, 'RIFF'], [8, 'WAVE'], [12, 'fmt '], [36, 'data']] as const) {
+      for (let index = 0; index < text.length; index++) header.setUint8(offset + index, text.charCodeAt(index));
+    }
+    header.setUint32(4, recorded.byteLength - 8, true); header.setUint32(16, 16, true);
+    header.setUint16(20, 1, true); header.setUint16(22, 2, true); header.setUint32(24, 48000, true);
+    header.setUint32(28, 192000, true); header.setUint16(32, 4, true); header.setUint16(34, 16, true);
+    header.setUint32(40, recorded.byteLength - 44, true);
+    for (let sample = 0; sample < 12000; sample++) {
+      const value = Math.round(Math.sin(2 * Math.PI * 440 * sample / 48000) * 4000);
+      header.setInt16(44 + sample * 4, value, true); header.setInt16(46 + sample * 4, value, true);
+    }
     class RecordedAudio {
       static isTypeSupported() { return true; }
       state = 'inactive';
-      mimeType = 'audio/webm';
+      mimeType = 'audio/wav';
       ondataavailable: ((event: { data: Blob }) => void) | null = null;
       onstop: (() => void) | null = null;
       onerror: (() => void) | null = null;
@@ -45,7 +59,7 @@ async function mockVoice(page: Page) {
         this.state = 'inactive';
         fixture.recordingStops += 1;
         queueMicrotask(() => {
-          this.ondataavailable?.({ data: new Blob(['mock recorded audio'], { type: this.mimeType }) });
+          this.ondataavailable?.({ data: new Blob([recorded], { type: this.mimeType }) });
           this.onstop?.();
         });
       }

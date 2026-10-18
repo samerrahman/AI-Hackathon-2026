@@ -94,6 +94,21 @@ function validateStuText(text: string, mode: TeachMode) {
   if ((text.match(/\?/g) || []).length !== 1 || text.length > (mode === 'teach' ? 450 : 900)) throw new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
   if (mode === 'teach' && text.split(/[.!?]+/).filter(Boolean).length > 3) throw new ApiError(502, 'Stu returned an overlong response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
 }
+// Stu's output rules are strict, so give a fresh sample one more try before surfacing an error.
+// Provider failures (network, auth, balance) are not retried here.
+async function stuReply(provider: TeachProvider, input: StuInput) {
+  for (let attempt = 1; ; attempt++) {
+    const stuCall = await provider.stu(input);
+    try {
+      const stu = stuSchema.parse(stuCall.data);
+      validateStuText(stu.text, input.mode);
+      if (input.lastQuestionStyle === stu.questionStyle) throw new ApiError(502, 'Stu repeated a question style. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
+      return { stuCall, stu };
+    } catch (error) {
+      if (attempt >= 2) throw error;
+    }
+  }
+}
 function verifiedRelearnBrief(judge: JudgeResult, state: TeachState, sources: SourceSpan[]) {
   const brief = judge.relearnBrief;
   if (!brief) throw new ApiError(502, 'The re-learn brief was incomplete. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
@@ -153,11 +168,8 @@ export async function runTeachTurn(request: TeachTurnRequest, provider: TeachPro
     ? { focus: { type: focus.type, teacherMessageId: focus.teacherMessageId, anchorQuote: focus.anchorQuote, instruction: focus.instruction },
         mistake: mistake ? { teacherMessageId: mistake.teacherMessageId, anchorQuote: mistake.anchorQuote, restatement: mistake.restatement } : null }
     : { brief, quizTurn: proposed.quizTurn, transition };
-  const stuCall = await provider.stu({ depth: state.depth, mode: proposed.mode, transcript: transcript.slice(-20), director,
+  const { stuCall, stu } = await stuReply(provider, { depth: state.depth, mode: proposed.mode, transcript: transcript.slice(-20), director,
     lastQuestionStyle: state.styles.at(-1) });
-  const stu = stuSchema.parse(stuCall.data);
-  validateStuText(stu.text, proposed.mode);
-  if (state.styles.at(-1) === stu.questionStyle) throw new ApiError(502, 'Stu repeated a question style. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT');
   proposed.styles.push(stu.questionStyle);
   if (proposed.mode === 'relearn') proposed.quizTurn++;
   const assistant: Message = { id: randomUUID(), role: 'assistant', text: stu.text };

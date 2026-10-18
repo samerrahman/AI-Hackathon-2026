@@ -83,7 +83,7 @@ test('mocked live dual-model turn shows honest status, one bar, debug evidence, 
   await expect(page.locator('.app')).not.toContainText('cover');
   await expect(page.locator('.app')).not.toContainText('explain stage');
   await page.getByRole('button', { name: 'Study settings' }).click();
-  await page.getByRole('button', { name: 'Off' }).click();
+  await page.locator('.setting-row', { hasText: 'Show Judge Evidence' }).getByRole('button', { name: 'Off' }).click();
   await page.getByRole('button', { name: 'Close dialog' }).click();
   await page.getByText('Your last explanation').click();
   await expect(page.getByText('Judge evidence').first()).toBeVisible();

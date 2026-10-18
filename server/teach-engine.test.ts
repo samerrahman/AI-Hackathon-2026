@@ -172,3 +172,18 @@ test('debug response is sanitized and sample never claims a live Step 5 turn', a
   assert.equal(demoTurn.liveStep5, false);
   assert.equal(demoTopic.liveStep5, false);
 });
+
+test('Stu gets one quiet retry when he breaks his output rules', async () => {
+  let attempts = 0;
+  const p = provider({ stu: () => (++attempts === 1
+    ? { text: 'Two questions? Really two?', questionStyle: 'literal' }
+    : { text: 'Wait, how does that work in your example?', questionStyle: 'example' }) });
+  const created = await topic(p.instance);
+  p.calls.length = 0;
+  const result = await runTeachTurn(turn(created), p.instance);
+  assert.deepEqual(p.calls, ['judge', 'stu', 'stu']);
+  assert.equal(result.message?.text, 'Wait, how does that work in your example?');
+  const stillBroken = provider({ stu: () => ({ text: 'Two questions? Really two?', questionStyle: 'literal' }) });
+  const again = await topic(stillBroken.instance);
+  await assert.rejects(runTeachTurn(turn(again), stillBroken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
+});

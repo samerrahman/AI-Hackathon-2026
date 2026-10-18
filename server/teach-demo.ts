@@ -14,6 +14,11 @@ const ideas = {
     ['causal claims', 'causal inference', 'what an experiment can conclude'],
   ],
 } as const;
+// Shorten a teacher quote at a word boundary instead of mid-word.
+function clip(text: string, max: number) {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).replace(/\s+\S*$/, '').replace(/[,;:.]$/, '')}…`;
+}
 function sampleResult<T>(data: T, model = 'sample-fixture'): ModelResult<T> { return { data, model, durationMs: 0 }; }
 export class DemoTeachProvider implements TeachProvider {
   readonly judgeModel = 'sample-fixture'; readonly stuModel = 'sample-fixture';
@@ -51,9 +56,15 @@ export class DemoTeachProvider implements TeachProvider {
     const questionStyle = styles[index];
     if (input.mode === 'relearn') {
       const brief = (input.director as { brief: { teacherQuote: string; accurateSummary: string; quizQuestion: string } }).brief;
-      return sampleResult({ text: `You taught me using “${brief.teacherQuote.slice(0, 70)}”. ${brief.accurateSummary} ${brief.quizQuestion}`, questionStyle });
+      return sampleResult({ text: `You taught me using “${clip(brief.teacherQuote, 70)}”. ${brief.accurateSummary} ${brief.quizQuestion}`, questionStyle });
     }
     const director = input.director as { focus: { anchorQuote: string } };
-    return sampleResult({ text: `I’m trying to follow “${director.focus.anchorQuote.slice(0, 65)}.” Could you show me how that works?`, questionStyle });
+    const asks = {
+      literal: (q: string) => `Wait, when you say “${q}”, do you mean that literally, word for word?`,
+      example: (q: string) => `Okay, “${q}”… could you give me one real example of that?`,
+      causal: (q: string) => `Hmm, you said “${q}”. Why does that happen?`,
+      contrast: (q: string) => `So “${q}”. How is that different from what happens otherwise?`,
+    };
+    return sampleResult({ text: asks[questionStyle](clip(director.focus.anchorQuote, 60).replace(/[?!]/g, '')), questionStyle });
   }
 }

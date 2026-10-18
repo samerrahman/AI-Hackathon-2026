@@ -15,6 +15,18 @@ npm run dev
 
 Open **http://127.0.0.1:5173**. Vite proxies `/api` to the Express server on loopback port 3001. The deterministic **Try a sample session** path works without API keys and always shows a **Sample demo** badge. Its limited fixture responses are for exploring the UI, not judging arbitrary course material.
 
+## Firebase Hosting preview
+
+The public site is [brodidnot.study](https://brodidnot.study), backed by Firebase project `ai-la-hackathon-2026`. Build and deploy the static frontend with:
+
+```sh
+npm ci
+npm run build:hosting
+npx firebase-tools deploy --only hosting --project ai-la-hackathon-2026
+```
+
+The Hosting build uses `.env.hosting` to show a preview: visitors can upload or paste notes, browse them locally, and view Stu's expressions. AI study, sample conversations, and voice need the Express API, which is not deployed by Firebase Hosting. The normal `npm run build` and local server retain the full application. See [docs/DOMAIN.md](docs/DOMAIN.md) for the Porkbun DNS records and custom-domain setup. Do not put provider API keys in Vite environment files.
+
 ## Start a live topic
 
 ```sh

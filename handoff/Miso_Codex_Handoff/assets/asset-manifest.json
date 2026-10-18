@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "generated_with": "built-in image-generation tool",
+  "assets": [
+    {
+      "file": "miso-expression-atlas.png",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGBA",
+      "role": "expression_atlas"
+    },
+    {
+      "file": "study-workspace-reference.png",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB",
+      "role": "visual_reference"
+    },
+    {
+      "file": "miso-character-concept.png",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB",
+      "role": "visual_reference"
+    }
+  ],
+  "atlas": {
+    "file": "miso-expression-atlas.png",
+    "columns": 3,
+    "rows": 2,
+    "coordinate_origin": "top-left",
+    "frames": [
+      {
+        "index": 0,
+        "name": "neutral",
+        "column": 0,
+        "row": 0,
+        "x": 0,
+        "y": 0,
+        "width": 512,
+        "height": 512
+      },
+      {
+        "index": 1,
+        "name": "thinking",
+        "column": 1,
+        "row": 0,
+        "x": 512,
+        "y": 0,
+        "width": 512,
+        "height": 512
+      },
+      {
+        "index": 2,
+        "name": "speaking",
+        "column": 2,
+        "row": 0,
+        "x": 1024,
+        "y": 0,
+        "width": 512,
+        "height": 512
+      },
+      {
+        "index": 3,
+        "name": "puzzled",
+        "column": 0,
+        "row": 1,
+        "x": 0,
+        "y": 512,
+        "width": 512,
+        "height": 512
+      },
+      {
+        "index": 4,
+        "name": "pleased",
+        "column": 1,
+        "row": 1,
+        "x": 512,
+        "y": 512,
+        "width": 512,
+        "height": 512
+      },
+      {
+        "index": 5,
+        "name": "blink",
+        "column": 2,
+        "row": 1,
+        "x": 1024,
+        "y": 512,
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "is_rigged": false,
+    "phoneme_accurate_lip_sync": false,
+    "notes": "Use as six discrete expression frames. Preserve original file; implement animation through client-side state changes and subtle transforms."
+  }
+}

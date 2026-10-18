@@ -1,6 +1,6 @@
 # Teach Stu API and private state
 
-`index.ts` serves `/api` on loopback port 3001 and the production frontend after a build. Vite proxies development API requests. Private keys never use a `VITE_` prefix.
+`dev.ts` serves `/api` on loopback port 3001. Vite proxies development API requests. In production, Vercel sends `/api/**` to `api/index.ts`, which exports this Express app. Private keys never use a `VITE_` prefix.
 
 ## Two-layer live flow
 
@@ -20,4 +20,8 @@ When all items are credited and no current factual problem remains, the same con
 
 The private rubric, evidence, transcript, and mode are in an authenticated AES-GCM state token bound to topic ID and the actual extracted document text. The browser persists that opaque token with local originals and drafts in IndexedDB. `.miso/state-key` is retained for compatibility; set `SESSION_SECRET` for a stable deployment secret. The server has no document or conversation database. Local deletion clears browser data and the transient revision guard, but cannot retract provider requests.
 
-Optional OpenAI transcription and speech endpoints are unchanged. Audio is sent to OpenAI only when requested; recordings stay in memory during transcription. Typed use needs no OpenAI key. Limits: five files, 20 MB and 100 pages per file, 300,000 extracted characters total, and 12 MB per recording. OCR is unavailable.
+Optional StepFun transcription and speech use the same server-side key as the Judge and Stu. The browser converts recordings to 16 kHz mono WAV in memory; audio is sent to StepFun only when requested. Typed use needs no microphone. Limits: five files, 20 MB and 100 pages per file, 300,000 extracted characters total, and 12 MB per recording. Public model endpoints are limited to 30 requests per IP per 10 minutes per function instance. OCR is unavailable.
+
+## Vercel deployment
+
+`npm run build` creates the full frontend. `api/index.ts` exports the Express API as a Vercel Function. Add `STEPFUN_API_KEY` and a stable, random `SESSION_SECRET` to Vercel's Preview and Production environment settings. The `SESSION_SECRET` must remain the same across deployments so saved sessions stay readable. `vercel.json` configures the Vite build, same-origin `/api` routing, SPA fallback, and Fluid Compute. The Firebase Hosting-only build remains live until the Vercel preview is verified and the domain is moved.

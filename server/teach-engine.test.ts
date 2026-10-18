@@ -5,7 +5,7 @@ import { ApiError } from './schema.js';
 import { createTeachTopic, openTeachState, runTeachTurn } from './teach-engine.js';
 import { DemoTeachProvider } from './teach-demo.js';
 import type { JudgeInput, ModelResult, StuInput, TeachProvider } from './teach-provider.js';
-import { rubricSchema, type Depth, type JudgeResult, type RubricDraft, type StuResult } from './teach-schema.js';
+import { createTopicSchema, rubricSchema, type Depth, type JudgeResult, type RubricDraft, type StuResult } from './teach-schema.js';
 
 process.env.SESSION_SECRET = 'teach-stu-test-only-secret';
 const source: SourceSpan = { id: 'source-1', documentId: 'doc-1', pageIndex: 0,
@@ -186,4 +186,17 @@ test('Stu gets one quiet retry when he breaks his output rules', async () => {
   const stillBroken = provider({ stu: () => ({ text: 'Two questions? Really two?', questionStyle: 'literal' }) });
   const again = await topic(stillBroken.instance);
   await assert.rejects(runTeachTurn(turn(again), stillBroken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
+});
+
+test('a topic can be taught without notes; the Judge grades from its own knowledge', async () => {
+  assert.equal(createTopicSchema.safeParse({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [] }).success, true);
+  const noNotes: RubricDraft = { ...draft, items: draft.items.map(item => ({ ...item, sourceIds: [] })) };
+  const p = provider({ rubric: noNotes, judge: input => { assert.deepEqual(input.sources, []); return judgeFor(input, []); } });
+  const created = await createTeachTopic({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [] }, p.instance);
+  assert.equal(created.progress.total, 6);
+  const result = await runTeachTurn({ topicId: created.topicId, stateToken: created.stateToken, documents: [], turnId: 'turn-1', revision: 1, messageId: 'user-1', text: statement }, p.instance);
+  assert.deepEqual(p.calls, ['rubric', 'judge', 'stu']);
+  assert.ok(result.message?.text);
+  // When notes exist, every rubric item must still cite them.
+  await assert.rejects(createTeachTopic({ title: 'Simple circuits', depth: 'big-picture', mode: 'live', documents: [document] }, provider({ rubric: noNotes }).instance));
 });

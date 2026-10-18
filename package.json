@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n api,web \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
+    "dev": "concurrently -k -n api,web \"tsx watch server/dev.ts\" \"vite --host 127.0.0.1\"",
     "build": "tsc --noEmit && vite build",
     "build:hosting": "tsc --noEmit && vite build --mode hosting",
-    "start": "tsx server/index.ts",
+    "start": "tsx server/dev.ts",
     "test": "node --import tsx --test server/*.test.ts src/lib/*.test.ts",
     "check": "tsc --noEmit",
     "test:e2e": "playwright test"

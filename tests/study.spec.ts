@@ -133,3 +133,19 @@ test('Stu’s expression playground previews each state without a session', asyn
     await expect(page.locator('.expression-stage .miso-character')).toHaveAttribute('data-state', state.toLowerCase());
   }
 });
+
+test('“or just start talking” starts a topic with no notes and no Notes tab', async ({ page }) => {
+  let topicBody: { documents: unknown[] } | undefined;
+  await page.route('**/api/topic', async route => {
+    topicBody = route.request().postDataJSON();
+    await route.fulfill({ json: { topicId: 'talk-topic', stateToken: 'opaque-encrypted-state-token', progress: { total: 6, credited: 0, percent: 0, mode: 'teach' },
+      message: { id: 'welcome', role: 'assistant', text: 'Hi! Teach me this topic. What should I know first?' }, liveStep5: false } });
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('textbox', { name: 'Topic title' }).fill('Photosynthesis');
+  await page.getByRole('button', { name: 'or just start talking' }).click();
+  await expect(page.getByRole('textbox', { name: 'Your explanation' })).toBeVisible();
+  expect(topicBody?.documents).toEqual([]);
+  await expect(page.getByRole('button', { name: 'Notes', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Look at my notes' })).toHaveCount(0);
+});

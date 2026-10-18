@@ -5,7 +5,19 @@ Gemini, Copilot, etc.) work in this repo. Tool-specific files (`CLAUDE.md`,
 `GEMINI.md`, ...) only point here. **Edit this file, not those.**
 
 ## Project
-AI LA Hackathon 2026 project. _TODO: one-paragraph description, stack, how to run._
+**Teach Stu**: students learn by teaching a deliberately dim AI student. The user picks a
+fixed depth (Big picture / Exam ready / Expert) and pastes notes or uploads PDFs. A hidden,
+pessimistic **Judge** (StepFun `step-5-preview`) grades every teacher message against a private
+cover → explain → connect rubric, with server-verified verbatim quotes. The visible **Stu**
+(`step-3.7-flash`) only sees the chat and a sanitized director note. The user sees one overall
+progress bar; once everything is taught, the chat flips to re-learn mode.
+
+The UI design (palette, SVG Stu with expressions, chat workspace, landing page) comes from Lea's
+`lea2` branch; the teaching engine and flow are Lucy's. Notes live in a **Notes** tab beside the chat.
+
+Stack: Vite + React (`src/`), Express API (`server/`), shared types (`shared/`), strict
+TypeScript, Zod, `node:test`, Playwright. Without `STEPFUN_API_KEY`, use **Try a sample session**.
+See `README.md` and `server/README.md` for the state and evidence rules.
 
 ## Before you start any work
 1. Work in your own clone or worktree. Fetch the latest `main` before creating
@@ -43,4 +55,4 @@ Any architectural choice (framework, API shape, data model, env var) goes in
 agents learn about it.
 
 ## Commands
-_TODO: install / dev / test / lint commands once the stack exists._
+`npm ci` · `npm run dev` (web on 127.0.0.1:5173, API on :3001) · `npm run check` · `npm test` · `npm run build` · `npm run test:e2e`

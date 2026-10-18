@@ -1,0 +1,9 @@
+{
+  "mode": "before-buffered",
+  "status": 200,
+  "headersMs": 15436,
+  "firstUserVisibleMs": 15437,
+  "completeMs": 15437,
+  "responseCharacters": 234,
+  "judgment": "explained-independently"
+}

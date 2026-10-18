@@ -23,8 +23,34 @@
   animation: miso-nod 520ms ease-out 1 both;
 }
 
+.miso-character--realization {
+  animation: stu-realize 620ms ease-out 1 both;
+}
+
+.miso-character--puzzled {
+  animation: stu-tilt 650ms ease-in-out 1 both;
+}
+
 .miso-character--speaking {
-  animation: miso-settle 320ms ease-out 1 both;
+  animation: stu-talk 650ms ease-in-out infinite;
+}
+
+@keyframes stu-tilt {
+  0% { transform: rotate(0deg); }
+  45%, 70% { transform: rotate(-5deg) translateY(-1px); }
+  100% { transform: rotate(-2deg); }
+}
+
+@keyframes stu-realize {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-4px) scale(1.025); }
+  65% { transform: translateY(1px) scale(0.995); }
+}
+
+@keyframes stu-talk {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  40% { transform: translateY(-1px) scaleY(1.008); }
+  70% { transform: translateY(1px) scaleY(0.995); }
 }
 
 @keyframes miso-attend {

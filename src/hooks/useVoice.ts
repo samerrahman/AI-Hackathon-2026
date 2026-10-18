@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { encodePcm16Wav } from '../lib/wav';
+import { speechChunks } from '../lib/speech';
 
 interface VoiceOptions {
   enabled: boolean;
@@ -41,6 +43,7 @@ export function useVoice(options: VoiceOptions) {
   callbacks.current = options;
   const mounted = useRef(true);
   const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [requestingPermission, setRequestingPermission] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -52,16 +55,21 @@ export function useVoice(options: VoiceOptions) {
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const recordingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const durationTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const decodingContext = useRef<AudioContext | null>(null);
   const transcriptionRequest = useRef<AbortController | null>(null);
   const speechRequest = useRef<AbortController | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useRef<string | null>(null);
+  const playbackCompletion = useRef<(() => void) | null>(null);
 
   const stopTracks = useCallback(() => {
     stream.current?.getTracks().forEach(track => track.stop());
     stream.current = null;
     if (recordingTimer.current) clearTimeout(recordingTimer.current);
     recordingTimer.current = null;
+    if (durationTimer.current) clearInterval(durationTimer.current);
+    durationTimer.current = null;
   }, []);
 
   const cancelRecording = useCallback(() => {
@@ -70,6 +78,9 @@ export function useVoice(options: VoiceOptions) {
     microphonePending.current = false;
     transcriptionRequest.current?.abort();
     transcriptionRequest.current = null;
+    const context = decodingContext.current;
+    decodingContext.current = null;
+    if (context && context.state !== 'closed') void context.close().catch(() => {});
     const current = recorder.current;
     recorder.current = null;
     if (current) {
@@ -81,6 +92,7 @@ export function useVoice(options: VoiceOptions) {
     stopTracks();
     if (mounted.current) {
       setRecording(false);
+      setRecordingSeconds(0);
       setRequestingPermission(false);
       setTranscribing(false);
     }
@@ -102,6 +114,8 @@ export function useVoice(options: VoiceOptions) {
     }
     if (audioUrl.current) URL.revokeObjectURL(audioUrl.current);
     audioUrl.current = null;
+    playbackCompletion.current?.();
+    playbackCompletion.current = null;
     if (mounted.current) {
       setSpeaking(false);
       setSpeechLoading(false);
@@ -183,10 +197,25 @@ export function useVoice(options: VoiceOptions) {
         const request = new AbortController();
         transcriptionRequest.current = request;
         setTranscribing(true);
-        const extension = type.includes('mp4') ? 'mp4' : type.includes('ogg') ? 'ogg' : 'webm';
-        const form = new FormData();
-        form.append('audio', audio, `explanation.${extension}`);
         try {
+          // StepFun accepts PCM WAV, not every browser's recording container.
+          // Decode and resample the recording; changing its filename is insufficient.
+          if (typeof AudioContext === 'undefined') throw new Error('This browser cannot prepare microphone audio. Your typed explanation is still available.');
+          const context = new AudioContext({ sampleRate: 16000 });
+          decodingContext.current = context;
+          let decoded: AudioBuffer;
+          try { decoded = await context.decodeAudioData(await audio.arrayBuffer()); }
+          catch { throw new Error('The recording could not be decoded. Try recording again, or continue typing.'); }
+          finally {
+            if (decodingContext.current === context) decodingContext.current = null;
+            if (context.state !== 'closed') await context.close().catch(() => {});
+          }
+          if (!isCurrent() || request.signal.aborted) return;
+          if (decoded.duration > MAX_RECORDING_MS / 1000 + 1) throw new Error('The recording is longer than three minutes. Record a shorter explanation or type it instead.');
+          const wav = encodePcm16Wav(Array.from({ length: decoded.numberOfChannels }, (_, index) => decoded.getChannelData(index)), decoded.sampleRate);
+          if (wav.byteLength > MAX_RECORDING_BYTES) throw new Error('The prepared recording exceeds 12 MB. Record a shorter explanation or type it instead.');
+          const form = new FormData();
+          form.append('audio', new Blob([wav], { type: 'audio/wav' }), 'explanation.wav');
           const response = await fetch('/api/transcribe', { method: 'POST', body: form, signal: request.signal });
           if (!response.ok) throw new Error(await responseError(response, 'Transcription is unavailable. Try again or type your explanation.'));
           const result: unknown = await response.json();
@@ -210,6 +239,11 @@ export function useVoice(options: VoiceOptions) {
 
       current.start(250);
       setRecording(true);
+      setRecordingSeconds(0);
+      const startedAt = Date.now();
+      durationTimer.current = setInterval(() => {
+        if (isCurrent()) setRecordingSeconds(Math.min(MAX_RECORDING_MS / 1000, Math.floor((Date.now() - startedAt) / 1000)));
+      }, 250);
       recordingTimer.current = setTimeout(() => {
         if (!isCurrent()) return;
         stopRecording();
@@ -234,7 +268,7 @@ export function useVoice(options: VoiceOptions) {
       callbacks.current.onError('Spoken responses are not configured on this server. The full response is available as text.');
       return;
     }
-    // Never play Miso into an open microphone or interrupt a student's transcript.
+    // Never play Stu into an open microphone or interrupt a student's transcript.
     if (recorder.current || microphonePending.current || transcriptionRequest.current) return;
     stopPlayback();
     const generation = playbackGeneration.current;
@@ -244,39 +278,55 @@ export function useVoice(options: VoiceOptions) {
     const isCurrent = () => mounted.current && generation === playbackGeneration.current && callbacks.current.enabled;
 
     try {
-      const response = await fetch('/api/speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-        signal: request.signal,
-      });
-      if (!response.ok) throw new Error(await responseError(response, 'Spoken audio is unavailable. You can read the response instead.'));
-      const audio = await response.blob();
-      if (!isCurrent() || request.signal.aborted) return;
-      if (!audio.size) throw new Error('The spoken response was empty. You can read the response instead.');
-      speechRequest.current = null;
-      const url = URL.createObjectURL(audio);
-      audioUrl.current = url;
-      const current = new Audio(url);
-      player.current = current;
-      current.onplaying = () => {
-        if (isCurrent()) {
-          setSpeaking(true);
-          setSpeechLoading(false);
-        }
+      const chunks = speechChunks(text);
+      const fetchAudio = async (chunk: string) => {
+        const response = await fetch('/api/speech', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: chunk }), signal: request.signal,
+        });
+        if (!response.ok) throw new Error(await responseError(response, 'Spoken audio is unavailable. You can read the response instead.'));
+        const audio = await response.blob();
+        if (!audio.size) throw new Error('The spoken response was empty. You can read the response instead.');
+        return audio;
       };
-      current.onended = () => { if (isCurrent()) stopPlayback(); };
-      current.onerror = () => {
-        if (!isCurrent()) return;
-        stopPlayback();
-        callbacks.current.onError('The spoken response could not play. You can read it in the conversation.');
-      };
-      await current.play();
+      // Capture prefetch failures immediately; consume them only after the current
+      // phrase has finished. At most one future phrase is requested at a time.
+      const prepare = (chunk: string) => fetchAudio(chunk).then(audio => ({ audio, error: null }), error => ({ audio: null, error }));
+      let pending = prepare(chunks[0]);
+      for (let index = 0; index < chunks.length; index++) {
+        const next = await pending;
+        if (!isCurrent() || request.signal.aborted) return;
+        if (next.error) throw next.error;
+        if (!next.audio) throw new Error('The spoken response was empty. You can read the response instead.');
+        if (index + 1 < chunks.length) pending = prepare(chunks[index + 1]);
+        const url = URL.createObjectURL(next.audio);
+        audioUrl.current = url;
+        const current = new Audio(url);
+        player.current = current;
+        await new Promise<void>((resolve, reject) => {
+          playbackCompletion.current = resolve;
+          current.onplaying = () => {
+            if (isCurrent()) { setSpeaking(true); setSpeechLoading(false); }
+          };
+          current.onended = () => resolve();
+          current.onerror = () => reject(new Error('The spoken response could not play. You can read it in the conversation.'));
+          void current.play().catch(reject);
+        });
+        if (!isCurrent() || request.signal.aborted) return;
+        playbackCompletion.current = null;
+        current.onplaying = null; current.onended = null; current.onerror = null;
+        player.current = null;
+        current.removeAttribute('src'); current.load();
+        URL.revokeObjectURL(url); audioUrl.current = null;
+        setSpeaking(false);
+        setSpeechLoading(index + 1 < chunks.length);
+      }
+      if (isCurrent()) { speechRequest.current = null; setSpeechLoading(false); }
     } catch (error) {
       if (isCurrent() && !request.signal.aborted) {
         stopPlayback();
         callbacks.current.onError(error instanceof DOMException && error.name === 'NotAllowedError'
-          ? 'Your browser blocked audio playback. Use Read aloud to try again, or read the response on screen.'
+          ? 'Your browser blocked audio playback. Use Replay reply to try again, or read the response on screen.'
           : error instanceof TypeError ? 'The connection was lost while preparing audio. You can read the response on screen.'
             : error instanceof Error ? error.message : 'The spoken response could not play. You can read it instead.');
       }
@@ -301,7 +351,7 @@ export function useVoice(options: VoiceOptions) {
   }, [options.enabled, dispose]);
 
   return {
-    recording, requestingPermission, transcribing, speaking, speechLoading,
+    recording, recordingSeconds, requestingPermission, transcribing, speaking, speechLoading,
     startRecording, stopRecording, cancelRecording, speak, stopPlayback, dispose,
   };
 }

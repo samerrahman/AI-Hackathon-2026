@@ -60,6 +60,7 @@ export interface ConceptRequest {
   sampleId?: 'analysis' | 'research';
 }
 export interface TurnRequest extends ConceptRequest {
+  submittedAt?: number;
   turnId: string;
   revision: number;
   concept: Concept;
@@ -72,6 +73,8 @@ export interface TurnRequest extends ConceptRequest {
   selection?: SelectionContext;
 }
 export interface AssessmentResult {
+  collectionId?: string;
+  timings?: TurnTimings;
   sessionId: string;
   turnId: string;
   revision: number;
@@ -93,6 +96,14 @@ export interface AssessmentResult {
 export interface AppConfig {
   liveAvailable: boolean;
   voiceAvailable: boolean;
-  provider: 'Gemini';
+  provider: 'StepFun' | 'Groq' | 'Gemini';
+  providerKey: 'STEPFUN_API_KEY' | 'GROQ_API_KEY' | 'GEMINI_API_KEY';
+  voiceProvider: 'Off' | 'StepFun';
+  voiceKey: 'STEPFUN_API_KEY' | null;
   limits: { maxFiles: number; maxFileBytes: number; maxPages: number; maxTextCharacters: number };
 }
+export interface ProviderTiming { task:string; durationMs:number; firstChunkMs?:number; firstReplyMs?:number; inputTokens?:number; outputTokens?:number; inputCharacters:number }
+export interface TurnTimings { submissionToReceiptMs?:number; contextMs:number; firstVisibleMs?:number; totalMs:number; providerCalls:ProviderTiming[] }
+export type TurnStreamEvent = {sessionId:string;turnId:string;revision:number;conceptId:string} & (
+  {type:'ready';receivedAt:number}|{type:'text';text:string}|{type:'complete';result:AssessmentResult}|{type:'error';error:string;code?:string}
+);

@@ -65,7 +65,7 @@ export async function ingestPdf(file: File, onProgress?: (message: string) => vo
 export async function ingestText(text: string, title = 'Pasted notes', signal?: AbortSignal): Promise<StudyDocument> {
   signal?.throwIfAborted();
   const clean = text.replace(/\r\n?/g, '\n').trim();
-  if (clean.length < 40) throw new Error('Paste at least a few sentences so Miso has enough material to work with.');
+  if (clean.length < 40) throw new Error('Paste at least a few sentences so Stu has enough material to work with.');
   if (clean.length > limits.maxTextCharacters) throw new Error('These notes are too long. Paste up to 300,000 characters at a time.');
   const encoded = new TextEncoder().encode(clean);
   const hash = await sha256(encoded.buffer);

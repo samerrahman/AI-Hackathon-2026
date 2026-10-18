@@ -217,11 +217,11 @@ export function DocumentViewer({ documents, documentId, pageIndex, onNavigate, h
         </> : <>
           <div className="pasted-document-heading"><span>STUDY NOTES</span><h2>{current.name}</h2>{current.pageCount > 1 && <small>Section {safePage + 1} of {current.pageCount}</small>}</div>
           {activeSpans.map(span => <p key={span.id} data-span-id={span.id} className={highlightIds.includes(span.id) ? 'text-source-highlight' : ''}>{span.text}</p>)}
-          <div className="pasted-document-footer">MISO · YOUR NOTES <span>{safePage + 1}</span></div>
+          <div className="pasted-document-footer">STU · YOUR NOTES <span>{safePage + 1}</span></div>
         </>}
       </div>
       {error && activeSpans.length > 0 && <details className="extracted-fallback"><summary>Read extracted text for this page</summary>{activeSpans.map(span => <p key={span.id}>{span.text}</p>)}</details>}
-      <p className="document-selection-tip">Select a passage to give Miso exact context.</p>
+      <p className="document-selection-tip">Select a passage to give Stu exact context.</p>
     </div>
     {highlighted.length > 0 && <div className="source-quote-card" role="note" aria-label="Referenced source passages"><div><span className="source-quote-marker" /> <strong>From your notes</strong><span>{current.kind === 'pdf' ? 'p.' : 'section'} {safePage + 1}</span></div>{highlighted.slice(0, 3).map(span => <blockquote key={span.id}>{span.text}</blockquote>)}{highlighted.some(span => !span.rects?.length) && current.kind === 'pdf' && <small>Page reference; exact text position was not available.</small>}</div>}
   </section>;

@@ -6,11 +6,24 @@ import type { ChallengeCandidate } from './schema.js';
 import { ApiError } from './schema.js';
 
 export interface PendingChallenge extends ChallengeCandidate { conceptId: string; attempts: number }
+export interface SessionMemory {
+  conceptId: string; kind: 'explanation' | 'correction'; statement: string; sourceIds: string[];
+  support: EvidenceRecord['support']; studentCorrected?: boolean;
+}
 export interface EngineState {
   version: 1; sessionId: string; scope: string; substantialTurns: number; lastChallengeAt: number;
   activeConceptId: string; pending?: PendingChallenge;
   support: Record<string, EvidenceRecord['support']>;
   statuses: Record<string, ConceptStatus>;
+  // Optional for compatibility with saved sessions created before compact memory.
+  memory?: SessionMemory[];
+}
+export function remember(state: EngineState, receipt: SessionMemory) {
+  const memory = (state.memory || []).filter(item => !(item.conceptId === receipt.conceptId && item.kind === receipt.kind && item.statement === receipt.statement));
+  memory.push(receipt);
+  // Drop whole receipts rather than truncating a statement and losing a condition.
+  while (memory.length > 8 || JSON.stringify(memory).length > 8_000) memory.shift();
+  state.memory = memory;
 }
 let cachedKey: Buffer | undefined;
 function stateKey() {

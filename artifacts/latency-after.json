@@ -1,0 +1,23 @@
+{
+  "mode": "after-streaming",
+  "headersMs": 29,
+  "firstUserVisibleMs": 4346,
+  "completeMs": 5300,
+  "responseCharacters": 172,
+  "status": "explained-independently",
+  "contextMs": 0.05358299999988958,
+  "totalMs": 5273.267625,
+  "providerCalls": [
+    {
+      "task": "assessment",
+      "durationMs": 5271.727457999999,
+      "firstChunkMs": 2170.1517920000006,
+      "firstReplyMs": 4318.340667,
+      "inputTokens": 1177,
+      "outputTokens": 493,
+      "inputCharacters": 919
+    }
+  ],
+  "submissionToReceiptMs": 24,
+  "firstVisibleMs": 4319.625542
+}

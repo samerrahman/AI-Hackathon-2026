@@ -26,3 +26,5 @@
 .conversation-current .prompt-text.prompt-collapsed{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}
 .expand-prompt{color:#95532f;font-size:11px;padding:2px 0 10px}
 .conversation-current{max-height:none;overflow:visible}
+
+.pending-explanation{border-left:2px solid #d8cbb7;padding:8px 12px;margin:4px 0 14px;font-size:12px;line-height:1.5;color:#596154;max-height:110px;overflow:auto}.pending-explanation strong{font-size:10px;color:#8e795c}.pending-explanation p{margin:4px 0}.reply-pending{display:flex;gap:5px;min-height:58px;align-items:center}.reply-pending span{width:5px;height:5px;border-radius:50%;background:#c0ad91}.streaming-reply .prompt-text{max-height:none}.compose-mic{margin-right:5px;color:#b56832}.answer-form>div>span{flex:1}.companion-character .character-state{margin-top:2px}.sidebar-doc strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}

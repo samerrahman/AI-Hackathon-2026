@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import './miso.css';
 
-export type MisoState = 'neutral' | 'thinking' | 'speaking' | 'puzzled' | 'pleased' | 'listening' | 'blink';
+export type MisoState = 'neutral' | 'thinking' | 'speaking' | 'puzzled' | 'pleased' | 'realization' | 'listening' | 'blink';
 
 interface MisoProps {
   state?: MisoState;
@@ -17,6 +17,7 @@ const FRAMES: Record<MisoState, [number, number]> = {
   speaking: [2, 0],
   puzzled: [0, 1],
   pleased: [1, 1],
+  realization: [1, 1],
   blink: [2, 1],
 };
 
@@ -40,7 +41,7 @@ export function Miso({ state = 'neutral', size = 152, reducedMotion = false }: M
       className={`miso-character miso-character--${state}${reducedMotion || hidden ? ' miso-character--still' : ''}`}
       style={style}
       role="img"
-      aria-label="Miso, your study companion"
+      aria-label="Stu, your study companion"
       data-state={state}
     />
   );

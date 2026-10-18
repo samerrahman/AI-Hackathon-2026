@@ -17,6 +17,7 @@ export const statusSchema = z.enum(['not-discussed', 'explaining', 'needs-anothe
 export const conceptSchema = z.object({ id, title: z.string().min(1).max(180), description: z.string().max(1500), question: z.string().max(1500), sourceIds: z.array(id).min(1).max(40), status: statusSchema });
 export const conceptRequestSchema = z.object({ sessionId: id, documents: z.array(documentSchema).min(1).max(LIMITS.maxFiles), mode: z.enum(['live', 'demo']), sampleId: z.enum(['analysis', 'research']).optional() });
 export const turnRequestSchema = conceptRequestSchema.extend({
+  submittedAt: z.number().optional(),
   turnId: id, revision: z.number().int().min(0), concept: conceptSchema,
   history: z.array(z.object({ id, role: z.enum(['user', 'assistant']), text: z.string().max(12_000), sourceIds: z.array(id).optional(), label: z.string().optional(), conceptId: id.optional() })).max(300),
   text: z.string().max(12_000), action: z.enum(['start', 'answer', 'hint', 'source', 'explain', 'skip', 'end', 'accept']),

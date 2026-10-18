@@ -53,7 +53,7 @@ export class StepFunProvider implements StudyProvider {
           response_format: { type: 'json_schema', json_schema: { name: 'study_response', strict: true, schema: jsonSchema } },
           max_tokens: 8192,
         }),
-        signal: AbortSignal.timeout(75_000),
+        signal: AbortSignal.timeout(Number(process.env.STEPFUN_TIMEOUT_MS || (process.env.FUNCTION_TARGET ? 27_000 : 75_000))),
       });
     } catch (error) {
       if (error instanceof Error && error.name === 'TimeoutError') throw new ApiError(504, 'Miso could not reach the study provider in time. Your draft is safe; try this turn again.', 'PROVIDER_TIMEOUT');

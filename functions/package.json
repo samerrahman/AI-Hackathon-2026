@@ -1,0 +1,10 @@
+{
+  "name": "teach-stu-functions",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "engines": { "node": "22" },
+  "dependencies": {
+    "firebase-functions": "^7.4.0"
+  }
+}

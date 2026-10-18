@@ -15,17 +15,18 @@ npm run dev
 
 Open **http://127.0.0.1:5173**. Vite proxies `/api` to the Express server on loopback port 3001. The deterministic **Try a sample session** path works without API keys and always shows a **Sample demo** badge. Its limited fixture responses are for exploring the UI, not judging arbitrary course material.
 
-## Firebase Hosting preview
+## Firebase deployment
 
-The public site is [brodidnot.study](https://brodidnot.study), backed by Firebase project `ai-la-hackathon-2026`. Build and deploy the static frontend with:
+The public site is [brodidnot.study](https://brodidnot.study), backed by Firebase project `ai-la-hackathon-2026`. The full app needs Firebase Hosting and its `/api` Cloud Function. The project must have billing enabled for Cloud Functions. Set `STEPFUN_API_KEY` and a stable random `SESSION_SECRET` as Firebase Functions secrets, then deploy:
 
 ```sh
 npm ci
-npm run build:hosting
-npx firebase-tools deploy --only hosting --project ai-la-hackathon-2026
+npm ci --prefix functions
+npm run build
+npx firebase-tools deploy --only functions,hosting --project ai-la-hackathon-2026
 ```
 
-The Hosting build uses `.env.hosting` to show a preview: visitors can upload or paste notes, browse them locally, and view Stu's expressions. AI study, sample conversations, and voice need the Express API, which is not deployed by Firebase Hosting. The normal `npm run build` and local server retain the full application. See [docs/DOMAIN.md](docs/DOMAIN.md) for the Porkbun DNS records and custom-domain setup. Do not put provider API keys in Vite environment files.
+The API bundle is created by the Functions predeploy step. Keep provider keys out of Vite environment files. See [docs/DOMAIN.md](docs/DOMAIN.md) for the Porkbun DNS records and custom-domain setup.
 
 ## Start a live topic
 
@@ -39,7 +40,7 @@ Give the topic a title, choose **Big picture**, **Exam ready**, or **Expert**, a
 
 During teaching, the hidden Judge receives relevant note text, the private rubric, and the conversation. Stu receives the visible conversation and a sanitized, teacher-grounded director note; Stu does not receive the notes or rubric. During re-learn, the Judge may give Stu a validated, source-grounded teaching brief. See [server/README.md](server/README.md) for the state and evidence rules.
 
-`OPENAI_API_KEY` is optional. It enables requested transcription and text-to-speech through the existing OpenAI endpoints. Typed interaction works fully without it. Microphone input remains explicit: record, stop, review or edit the transcript, then send it. `ENABLE_JUDGE_DEBUG=true` exposes a **Show Judge Evidence** setting for sanitized evidence IDs, verified quotes, problem categories, focus, and model timing. It defaults off and never displays private requirement text or raw model responses.
+The same StepFun key enables requested transcription and text-to-speech. Microphone input remains explicit: record, stop, review or edit the transcript, then send it. `ENABLE_JUDGE_DEBUG=true` exposes a **Show Judge Evidence** setting for sanitized evidence IDs, verified quotes, problem categories, focus, and model timing. It defaults off and never displays private requirement text or raw model responses.
 
 ## Real Step 5 smoke test
 
@@ -50,11 +51,11 @@ A real provider call was not made during this implementation. To test with an au
 3. Send a substantive typed explanation in your own words. Confirm Stu asks one short question, the overall progress updates only for supported teaching, and **Step 5 Preview · Live** appears after that complete turn. Open Settings to confirm it reports a completed live turn.
 4. Send a vague answer such as “yes, exactly” and confirm it does not earn new credit. If a provider error occurs, confirm the draft remains available for retry.
 
-Use original pasted notes for this test; the bundled samples are deterministic. A live account with model access and sufficient balance is required. No OpenAI key is needed for typed testing. The integration follows official [StepFun chat completions](https://platform.stepfun.ai/docs/en/api-reference/chat/chat-completion-create), [structured output](https://platform.stepfun.ai/docs/en/guides/developer/json-mode), and [error handling](https://platform.stepfun.ai/docs/en/guides/developer/exception) documentation.
+Use original pasted notes for this test; the bundled samples are deterministic. A live account with model access and sufficient balance is required. The integration follows official [StepFun chat completions](https://platform.stepfun.ai/docs/en/api-reference/chat/chat-completion-create), [structured output](https://platform.stepfun.ai/docs/en/guides/developer/json-mode), and [error handling](https://platform.stepfun.ai/docs/en/guides/developer/exception) documentation.
 
 ## Data and limits
 
-Original PDFs, extracted text, drafts, conversation, progress counts, and an opaque encrypted state token are saved in this browser's IndexedDB. The private rubric and evidence state exist only inside authenticated AES-GCM server state, bound to the topic and actual document text. The browser cannot read rubric requirements from the token. Relevant extracted text and conversation are sent to StepFun for live Judge calls. Stu receives conversation and a safe director note in teaching mode. Requested voice sends audio or response text to OpenAI. Raw recordings are not persisted by Teach Stu. Provider account retention settings still apply; deleting local data cannot retract requests already processed by providers.
+Original PDFs, extracted text, drafts, conversation, progress counts, and an opaque encrypted state token are saved in this browser's IndexedDB. The private rubric and evidence state exist only inside authenticated AES-GCM server state, bound to the topic and actual document text. The browser cannot read rubric requirements from the token. Relevant extracted text and conversation are sent to StepFun for live Judge calls. Stu receives conversation and a safe director note in teaching mode. Requested voice sends audio or response text to StepFun. Raw recordings are not persisted by Teach Stu. Provider account retention settings still apply; deleting local data cannot retract requests already processed by providers.
 
 Collections allow five files, 20 MB and 100 pages per file, and 300,000 extracted characters total. Recordings are limited to three minutes and 12 MB. Scanned-PDF OCR is unavailable. PDF extraction can lose mathematical layout, so inspect formulas against the original page. The server stores no document or conversation database. Its local encryption key remains in `.miso/state-key` for compatibility with existing saved sessions; keep it stable across restarts or set `SESSION_SECRET`.
 

@@ -15,6 +15,7 @@ import { DemoTeachProvider } from './teach-demo.js';
 
 export const app = express();
 app.disable('x-powered-by');
+if (process.env.FUNCTION_TARGET) app.set('trust proxy', 1);
 app.use(express.json({ limit: '8mb' }));
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -22,10 +23,22 @@ app.use('/api', (req, res, next) => {
   if (origin) {
     try {
       const url = new URL(origin);
-      const host = req.hostname;
+      const host = req.get('x-forwarded-host')?.split(',')[0]?.trim().split(':')[0] || req.hostname;
       if (url.hostname !== host && !(['localhost', '127.0.0.1'].includes(url.hostname) && ['localhost', '127.0.0.1'].includes(host))) throw new Error();
     } catch { return res.status(403).json({ error: 'This request must come from the Miso application.' }); }
   }
+  next();
+});
+// Bound public, paid model calls even when a browser does not send Origin.
+const windows = new Map<string, { starts: number; count: number }>();
+app.use(['/api/topic', '/api/teach', '/api/concepts', '/api/turn', '/api/transcribe', '/api/speech'], (req, res, next) => {
+  const now = Date.now();
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  if (windows.size > 10000) for (const [key, value] of windows) if (now - value.starts >= 600000) windows.delete(key);
+  const window = windows.get(ip);
+  const entry = !window || now - window.starts >= 600000 ? { starts: now, count: 0 } : window;
+  windows.set(ip, entry);
+  if (++entry.count > 30) { res.setHeader('Retry-After', String(Math.ceil((entry.starts + 600000 - now) / 1000))); return res.status(429).json({ error: 'Too many study requests. Please try again in a few minutes.', code: 'RATE_LIMIT' }); }
   next();
 });
 const gate = new RevisionGate();
@@ -36,7 +49,7 @@ const provider = (mode: 'live' | 'demo', sampleId?: 'analysis' | 'research') => 
   }
   return new StepFunProvider();
 };
-app.get('/api/config', (_req, res) => res.json({ liveAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim()), voiceAvailable: Boolean(process.env.OPENAI_API_KEY), judgeDebugAvailable: process.env.ENABLE_JUDGE_DEBUG === 'true', provider: 'Step 5 Preview', limits: LIMITS }));
+app.get('/api/config', (_req, res) => res.json({ liveAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim()), voiceAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim()), judgeDebugAvailable: process.env.ENABLE_JUDGE_DEBUG === 'true', provider: 'Step 5 Preview', limits: LIMITS }));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.post('/api/topic', async (req, res) => {
   const request = createTopicSchema.parse(req.body);
@@ -69,18 +82,18 @@ app.post('/api/turn', async (req, res) => {
 // The server stores no uploaded files or conversations; clear only its transient revision guard.
 app.delete('/api/session/:id', (req, res) => { gate.remove(req.params.id); res.status(204).end(); });
 
-const audioTypes: Record<string, string> = { 'audio/webm': 'webm', 'video/webm': 'webm', 'audio/mp4': 'mp4', 'video/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/x-m4a': 'm4a' };
+const audioTypes: Record<string, string> = { 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3' };
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, callback) => {
-  if (!audioTypes[file.mimetype.split(';')[0]]) callback(new ApiError(415, 'This recording format is not supported. Try typing, or use a browser that records WebM or MP4.'));
+  if (!audioTypes[file.mimetype.split(';')[0]]) callback(new ApiError(415, 'This recording format is not supported. Try recording again or type your explanation.'));
   else callback(null, true);
 } });
 async function voiceFetch(path: string, init: RequestInit) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new ApiError(503, 'Voice needs OPENAI_API_KEY on the server. You can complete the session by typing.', 'VOICE_NOT_CONFIGURED');
+  const key = process.env.STEPFUN_API_KEY;
+  if (!key) throw new ApiError(503, 'Voice is not configured on the server. You can complete the session by typing.', 'VOICE_NOT_CONFIGURED');
   let response: Response;
-  try { response = await fetch(`https://api.openai.com/v1/audio/${path}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(45_000) }); }
+  try { response = await fetch(`${process.env.STEPFUN_BASE_URL || 'https://api.stepfun.ai/v1'}/audio/${path}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(45_000) }); }
   catch { throw new ApiError(504, 'The voice service did not respond in time. Try again or continue typing.', 'VOICE_TIMEOUT'); }
-  if (!response.ok) throw new ApiError(502, 'The voice service could not complete this request. Check server voice credentials and model access, or continue typing.', 'VOICE_ERROR');
+  if (!response.ok) throw new ApiError(502, 'StepFun could not complete this voice request. Please retry or continue typing.', 'VOICE_ERROR');
   return response;
 }
 app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
@@ -88,7 +101,7 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   const mime = req.file.mimetype.split(';')[0];
   const form = new FormData();
   form.append('file', new Blob([new Uint8Array(req.file.buffer)], { type: mime }), `recording.${audioTypes[mime]}`);
-  form.append('model', process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe');
+  form.append('model', process.env.STEPFUN_ASR_MODEL || 'stepaudio-2.5-asr');
   form.append('response_format', 'json');
   const response = await voiceFetch('transcriptions', { method: 'POST', body: form });
   const data = await response.json() as { text?: string };
@@ -96,10 +109,10 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   res.json({ text: data.text });
 });
 app.post('/api/speech', async (req, res) => {
-  const { text } = z.object({ text: z.string().min(1).max(4096) }).parse(req.body);
+  const { text } = z.object({ text: z.string().min(1).max(1000) }).parse(req.body);
   const response = await voiceFetch('speech', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts', input: text, voice: process.env.OPENAI_TTS_VOICE || 'coral', response_format: 'mp3', instructions: 'Speak like a calm college classmate: clear, warm, measured, and respectful. Read mathematical notation naturally. Never use a baby voice.' }),
+    body: JSON.stringify({ model: process.env.STEPFUN_TTS_MODEL || 'stepaudio-3-tts', input: text, voice: process.env.STEPFUN_TTS_VOICE || 'zixinnansheng', response_format: 'mp3', instruction: 'Speak in English like a calm college classmate: clear, warm, measured, and respectful. Read mathematical notation naturally.' }),
   });
   res.type('audio/mpeg').send(Buffer.from(await response.arrayBuffer()));
 });
@@ -119,8 +132,3 @@ const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
   res.status(500).json({ error: 'Miso could not finish this action. Your draft is safe; please retry.', code: 'SERVER_ERROR' });
 };
 app.use(errors);
-
-if (process.env.NODE_ENV !== 'test') {
-  const port = Number(process.env.PORT || 3001);
-  app.listen(port, '127.0.0.1', () => console.log(`Miso API listening on http://127.0.0.1:${port}`));
-}

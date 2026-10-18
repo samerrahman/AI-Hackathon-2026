@@ -10,6 +10,35 @@ interface VoiceOptions {
 const MAX_RECORDING_BYTES = 12 * 1024 * 1024;
 const MAX_RECORDING_MS = 3 * 60 * 1000;
 
+// MediaRecorder commonly produces WebM or MP4. StepFun's transcription endpoint
+// accepts WAV, so convert in memory before upload without retaining raw audio.
+async function asWav(recording: Blob): Promise<Blob> {
+  const context = new AudioContext();
+  let decoded: AudioBuffer;
+  try { decoded = await context.decodeAudioData(await recording.arrayBuffer()); }
+  finally { await context.close(); }
+  const rate = 16000;
+  const frames = Math.ceil(decoded.duration * rate);
+  const offline = new OfflineAudioContext(1, frames, rate);
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  const samples = (await offline.startRendering()).getChannelData(0);
+  const bytes = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(bytes);
+  const label = (offset: number, value: string) => { for (let index = 0; index < value.length; index++) view.setUint8(offset + index, value.charCodeAt(index)); };
+  label(0, 'RIFF'); view.setUint32(4, bytes.byteLength - 8, true); label(8, 'WAVE'); label(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  label(36, 'data'); view.setUint32(40, samples.length * 2, true);
+  for (let index = 0; index < samples.length; index++) {
+    const value = Math.max(-1, Math.min(1, samples[index]));
+    view.setInt16(44 + index * 2, value < 0 ? value * 32768 : value * 32767, true);
+  }
+  return new Blob([bytes], { type: 'audio/wav' });
+}
+
 function recordingError(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
@@ -183,10 +212,11 @@ export function useVoice(options: VoiceOptions) {
         const request = new AbortController();
         transcriptionRequest.current = request;
         setTranscribing(true);
-        const extension = type.includes('mp4') ? 'mp4' : type.includes('ogg') ? 'ogg' : 'webm';
         const form = new FormData();
-        form.append('audio', audio, `explanation.${extension}`);
         try {
+          const wav = await asWav(audio);
+          if (wav.size > MAX_RECORDING_BYTES) throw new Error('That recording is too long to transcribe. Try a shorter explanation or type it instead.');
+          form.append('audio', wav, 'explanation.wav');
           const response = await fetch('/api/transcribe', { method: 'POST', body: form, signal: request.signal });
           if (!response.ok) throw new Error(await responseError(response, 'Transcription is unavailable. Try again or type your explanation.'));
           const result: unknown = await response.json();

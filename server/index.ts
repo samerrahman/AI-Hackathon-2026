@@ -15,7 +15,7 @@ import { DemoTeachProvider } from './teach-demo.js';
 
 export const app = express();
 app.disable('x-powered-by');
-if (process.env.FUNCTION_TARGET) app.set('trust proxy', 1);
+if (process.env.VERCEL) app.set('trust proxy', 1);
 app.use(express.json({ limit: '8mb' }));
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -49,7 +49,7 @@ const provider = (mode: 'live' | 'demo', sampleId?: 'analysis' | 'research') => 
   }
   return new StepFunProvider();
 };
-app.get('/api/config', (_req, res) => res.json({ liveAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim()), voiceAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim()), judgeDebugAvailable: process.env.ENABLE_JUDGE_DEBUG === 'true', provider: 'Step 5 Preview', limits: LIMITS }));
+app.get('/api/config', (_req, res) => res.json({ liveAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim() && (!process.env.VERCEL || process.env.SESSION_SECRET?.trim())), voiceAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim()), judgeDebugAvailable: process.env.ENABLE_JUDGE_DEBUG === 'true', provider: 'Step 5 Preview', limits: LIMITS }));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.post('/api/topic', async (req, res) => {
   const request = createTopicSchema.parse(req.body);

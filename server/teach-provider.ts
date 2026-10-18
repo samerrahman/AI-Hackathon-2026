@@ -45,7 +45,7 @@ export class StepFunTeachProvider implements TeachProvider {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.key}` },
         body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(data) }], stream: false,
           response_format: { type: 'json_schema', json_schema: { name: `teach_stu_${role}`, strict: true, schema: structuralSchema(z.toJSONSchema(schema)) } }, max_tokens: role === 'stu' ? 650 : 8192 }),
-        signal: AbortSignal.timeout(Number(process.env.STEPFUN_TIMEOUT_MS || (process.env.FUNCTION_TARGET ? 27_000 : 75_000))),
+        signal: AbortSignal.timeout(Number(process.env.STEPFUN_TIMEOUT_MS || 75_000)),
       });
     } catch (error) {
       if (error instanceof Error && error.name === 'TimeoutError') throw new ApiError(504, 'StepFun took too long. Your message is safe; retry.', 'PROVIDER_TIMEOUT');

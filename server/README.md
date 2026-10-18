@@ -1,6 +1,6 @@
 # Teach Stu API and private state
 
-`dev.ts` serves `/api` on loopback port 3001. Vite proxies development API requests. In production, Firebase Hosting routes `/api/**` to the `api` Cloud Function, which imports `index.ts`. Private keys never use a `VITE_` prefix.
+`dev.ts` serves `/api` on loopback port 3001. Vite proxies development API requests. In production, Vercel sends `/api/**` to `api/index.ts`, which exports this Express app. Private keys never use a `VITE_` prefix.
 
 ## Two-layer live flow
 
@@ -20,8 +20,8 @@ When all items are credited and no current factual problem remains, the same con
 
 The private rubric, evidence, transcript, and mode are in an authenticated AES-GCM state token bound to topic ID and the actual extracted document text. The browser persists that opaque token with local originals and drafts in IndexedDB. `.miso/state-key` is retained for compatibility; set `SESSION_SECRET` for a stable deployment secret. The server has no document or conversation database. Local deletion clears browser data and the transient revision guard, but cannot retract provider requests.
 
-Optional StepFun transcription and speech use the same server-side key as the Judge and Stu. The browser converts recordings to 16 kHz mono WAV in memory; audio is sent to StepFun only when requested. Typed use needs no microphone. Limits: five files, 20 MB and 100 pages per file, 300,000 extracted characters total, and 12 MB per recording. Public model endpoints are limited to 30 requests per IP per 10 minutes per function instance, and the function has a two-instance ceiling. OCR is unavailable.
+Optional StepFun transcription and speech use the same server-side key as the Judge and Stu. The browser converts recordings to 16 kHz mono WAV in memory; audio is sent to StepFun only when requested. Typed use needs no microphone. Limits: five files, 20 MB and 100 pages per file, 300,000 extracted characters total, and 12 MB per recording. Public model endpoints are limited to 30 requests per IP per 10 minutes per function instance. OCR is unavailable.
 
-## Firebase deployment
+## Vercel deployment
 
-`npm run build` creates the full frontend; `npm run build:functions` bundles the API into `functions/lib` before Functions deployment. Set `STEPFUN_API_KEY` and a stable, random `SESSION_SECRET` with Firebase Functions Secret Manager. The Firebase project must have billing enabled for Cloud Functions. Deploy both targets together with `firebase deploy --only functions,hosting --project ai-la-hackathon-2026`. The Hosting-only build remains available for local preview, but must not be deployed as the full site.
+`npm run build` creates the full frontend. `api/index.ts` exports the Express API as a Vercel Function. Add `STEPFUN_API_KEY` and a stable, random `SESSION_SECRET` to Vercel's Preview and Production environment settings. The `SESSION_SECRET` must remain the same across deployments so saved sessions stay readable. `vercel.json` configures the Vite build, same-origin `/api` routing, SPA fallback, and Fluid Compute. The Firebase Hosting-only build remains live until the Vercel preview is verified and the domain is moved.

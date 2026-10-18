@@ -36,7 +36,7 @@ const hostingPreview = import.meta.env.VITE_HOSTING_ONLY === 'true';
 const previewToken = 'hosting-preview';
 const plainDocs = (docs: StudyDocument[]) => docs.map(({ blob, ...doc }) => doc);
 async function api<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const timeout = AbortSignal.timeout(65000);
+  const timeout = AbortSignal.timeout(170000);
   const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
   const data = await response.json().catch(() => ({ error: 'The connection was interrupted. Your words are still here.' }));
   if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Stu could not finish this request. Please retry.');

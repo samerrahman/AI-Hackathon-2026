@@ -15,18 +15,17 @@ npm run dev
 
 Open **http://127.0.0.1:5173**. Vite proxies `/api` to the Express server on loopback port 3001. The deterministic **Try a sample session** path works without API keys and always shows a **Sample demo** badge. Its limited fixture responses are for exploring the UI, not judging arbitrary course material.
 
-## Firebase deployment
+## Public deployment
 
-The public site is [brodidnot.study](https://brodidnot.study), backed by Firebase project `ai-la-hackathon-2026`. The full app needs Firebase Hosting and its `/api` Cloud Function. The project must have billing enabled for Cloud Functions. Set `STEPFUN_API_KEY` and a stable random `SESSION_SECRET` as Firebase Functions secrets, then deploy:
+The public address is [brodidnot.study](https://brodidnot.study). Firebase Hosting currently serves a static preview for free. The full site uses Vercel's Vite hosting and a same-origin Express function; the Vercel project needs server-side `STEPFUN_API_KEY` and a stable random `SESSION_SECRET` in its Production and Preview environment variables. Keep both out of Git and Vite variables. Deploy and verify the Vercel preview before moving the domain's DNS from Firebase to Vercel.
 
 ```sh
 npm ci
-npm ci --prefix functions
 npm run build
-npx firebase-tools deploy --only functions,hosting --project ai-la-hackathon-2026
+vercel deploy
 ```
 
-The API bundle is created by the Functions predeploy step. Keep provider keys out of Vite environment files. See [docs/DOMAIN.md](docs/DOMAIN.md) for the Porkbun DNS records and custom-domain setup.
+`vercel.json` sends `/api` requests to the Express function and serves Vite's `dist` files for the rest. Vercel Fluid Compute is enabled with a 180-second maximum request duration. See [docs/DOMAIN.md](docs/DOMAIN.md) for the current Porkbun records; update them to Vercel's project-specific values only after the preview works.
 
 ## Start a live topic
 

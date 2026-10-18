@@ -16,6 +16,7 @@ let cachedKey: Buffer | undefined;
 export function stateKey() {
   if (cachedKey) return cachedKey;
   if (process.env.SESSION_SECRET) return cachedKey = createHash('sha256').update(process.env.SESSION_SECRET).digest();
+  if (process.env.VERCEL) throw new ApiError(503, 'The study server is missing its session secret. Please try again later.', 'SESSION_NOT_CONFIGURED');
   const dir = resolve('.miso');
   const file = resolve(dir, 'state-key');
   mkdirSync(dir, { recursive: true, mode: 0o700 });

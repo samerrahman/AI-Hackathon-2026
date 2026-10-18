@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" width="1000" height="640" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+    <g id="bolt"><circle r="5" fill="#2b2b2b"/><circle r="2" fill="#777"/></g>
+    <path id="jug" d="M-55,12 C-58,-30 58,-30 55,12 C52,32 -52,32 -55,12 Z"/>
+    <path id="jugmouth" d="M-36,2 C-30,-16 30,-16 36,2 C20,-4 -20,-4 -36,2 Z"/>
+  </defs>
+
+  <rect width="1000" height="640" fill="#e7e5e0"/>
+  <text x="30" y="40" font-size="20" fill="#57534e" font-weight="bold">Sample hold inventory · 15 holds</text>
+
+  <g filter="url(#drop)">
+    <!-- Row 1 -->
+    <g transform="translate(110,130)">
+      <use href="#jug" fill="#7c3aed"/><use href="#jugmouth" fill="#000" fill-opacity="0.35"/><use href="#bolt" y="14"/>
+    </g>
+    <g transform="translate(300,130) scale(0.72)">
+      <use href="#jug" fill="#0d9488"/><use href="#jugmouth" fill="#000" fill-opacity="0.35"/><use href="#bolt" y="14"/>
+    </g>
+    <g transform="translate(490,130)">
+      <rect x="-32" y="-9" width="64" height="18" rx="5" fill="#ea580c"/><rect x="-30" y="-9" width="60" height="4" rx="2" fill="#000" fill-opacity="0.3"/><use href="#bolt" y="2"/>
+    </g>
+    <g transform="translate(680,130) rotate(-8)">
+      <rect x="-27" y="-8" width="54" height="16" rx="5" fill="#db2777"/><rect x="-25" y="-8" width="50" height="4" rx="2" fill="#000" fill-opacity="0.3"/><use href="#bolt" y="2"/>
+    </g>
+    <g transform="translate(870,130)">
+      <rect x="-48" y="-14" width="96" height="28" rx="7" fill="#2563eb"/><rect x="-45" y="-14" width="90" height="6" rx="3" fill="#000" fill-opacity="0.3"/><use href="#bolt" y="3"/>
+    </g>
+
+    <!-- Row 2 -->
+    <g transform="translate(110,300)">
+      <ellipse rx="60" ry="40" fill="#16a34a"/><ellipse cx="-14" cy="-12" rx="30" ry="14" fill="#fff" fill-opacity="0.18"/><use href="#bolt"/>
+    </g>
+    <g transform="translate(300,300)">
+      <rect x="-19" y="-42" width="38" height="84" rx="17" fill="#ca8a04"/><rect x="-6" y="-36" width="5" height="72" rx="2" fill="#000" fill-opacity="0.22"/><use href="#bolt"/>
+    </g>
+    <g transform="translate(490,300)">
+      <path d="M-14,-46 C26,-36 30,36 -14,46 C6,20 6,-20 -14,-46 Z" fill="#dc2626"/><use href="#bolt" x="6"/>
+    </g>
+    <g transform="translate(680,300)">
+      <path d="M-50,-6 C-40,30 40,30 50,-6 C24,10 -24,10 -50,-6 Z" fill="#f5f5f4" stroke="#a8a29e" stroke-width="2"/><use href="#bolt" y="10"/>
+    </g>
+    <g transform="translate(870,300)">
+      <circle r="17" fill="#1c1917"/><use href="#bolt"/>
+    </g>
+
+    <!-- Row 3 -->
+    <g transform="translate(110,470) scale(1.25)">
+      <use href="#jug" fill="#6d28d9"/><use href="#jugmouth" fill="#000" fill-opacity="0.35"/><use href="#bolt" y="14"/>
+    </g>
+    <g transform="translate(300,470) rotate(10)">
+      <rect x="-42" y="-12" width="84" height="24" rx="7" fill="#f97316"/><rect x="-40" y="-12" width="80" height="5" rx="2" fill="#000" fill-opacity="0.3"/><use href="#bolt" y="3"/>
+    </g>
+    <g transform="translate(490,470)">
+      <rect x="-23" y="-52" width="46" height="104" rx="21" fill="#1d4ed8"/><rect x="-7" y="-44" width="6" height="88" rx="3" fill="#000" fill-opacity="0.22"/><use href="#bolt"/>
+    </g>
+    <g transform="translate(680,470)">
+      <ellipse rx="21" ry="14" fill="#57534e"/><use href="#bolt"/>
+    </g>
+    <g transform="translate(870,470)">
+      <circle r="15" fill="#eab308"/><use href="#bolt"/>
+    </g>
+  </g>
+
+  <!-- Labels -->
+  <g font-size="17" fill="#44403c" text-anchor="middle">
+    <text x="110" y="205">H1 · jug</text><text x="300" y="205">H2 · jug</text><text x="490" y="205">H3 · crimp</text><text x="680" y="205">H4 · crimp</text><text x="870" y="205">H5 · edge</text>
+    <text x="110" y="370">H6 · sloper</text><text x="300" y="370">H7 · pinch</text><text x="490" y="370">H8 · sidepull</text><text x="680" y="370">H9 · undercling</text><text x="870" y="370">H10 · foot</text>
+    <text x="110" y="555">H11 · jug XL</text><text x="300" y="555">H12 · edge</text><text x="490" y="555">H13 · pinch</text><text x="680" y="555">H14 · foot</text><text x="870" y="555">H15 · foot</text>
+  </g>
+
+  <!-- 30 cm ruler for scale -->
+  <g transform="translate(200,590)">
+    <rect width="600" height="26" fill="#fde68a" stroke="#a16207" stroke-width="1.5"/>
+    <g stroke="#78350f" stroke-width="1.5">
+      <line x1="0" y1="0" x2="0" y2="14"/><line x1="100" y1="0" x2="100" y2="14"/><line x1="200" y1="0" x2="200" y2="14"/>
+      <line x1="300" y1="0" x2="300" y2="14"/><line x1="400" y1="0" x2="400" y2="14"/><line x1="500" y1="0" x2="500" y2="14"/><line x1="600" y1="0" x2="600" y2="14"/>
+    </g>
+    <text x="300" y="22" font-size="11" fill="#78350f" text-anchor="middle">30 cm</text>
+  </g>
+</svg>

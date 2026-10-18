@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 800" width="700" height="800">
+  <defs>
+    <linearGradient id="ply" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dcc095"/>
+      <stop offset="0.55" stop-color="#cfae7c"/>
+      <stop offset="1" stop-color="#b8915d"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000" stop-opacity="0.22"/>
+      <stop offset="0.45" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.1"/>
+    </linearGradient>
+    <pattern id="tnuts" width="35" height="35" patternUnits="userSpaceOnUse">
+      <circle cx="17.5" cy="17.5" r="2.6" fill="#5b442b"/>
+      <circle cx="17.5" cy="17.5" r="1.1" fill="#1c140b"/>
+    </pattern>
+    <pattern id="grain" width="140" height="18" patternUnits="userSpaceOnUse">
+      <path d="M0 9 Q35 4 70 9 T140 9" fill="none" stroke="#a8814f" stroke-opacity="0.18" stroke-width="1.2"/>
+    </pattern>
+  </defs>
+
+  <!-- plywood panels -->
+  <rect width="700" height="740" fill="url(#ply)"/>
+  <rect width="700" height="740" fill="url(#grain)"/>
+  <rect width="700" height="740" fill="url(#tnuts)"/>
+  <g stroke="#7d5c37" stroke-width="2.5" opacity="0.75">
+    <line x1="233" y1="0" x2="233" y2="740"/>
+    <line x1="467" y1="0" x2="467" y2="740"/>
+    <line x1="0" y1="370" x2="700" y2="370"/>
+  </g>
+
+  <!-- existing volume (top right) -->
+  <g>
+    <polygon points="520,170 640,215 610,330 505,300" fill="#334155"/>
+    <polygon points="520,170 640,215 585,245" fill="#475569"/>
+    <polygon points="505,300 585,245 610,330" fill="#1e293b"/>
+    <polygon points="520,170 585,245 505,300" fill="#3b4a60"/>
+  </g>
+
+  <!-- kicker + mat edge -->
+  <rect y="740" width="700" height="60" fill="#3b2e22"/>
+  <rect y="736" width="700" height="6" fill="#2a2018"/>
+  <g fill="#5b442b">
+    <circle cx="70" cy="770" r="2.4"/><circle cx="175" cy="770" r="2.4"/><circle cx="280" cy="770" r="2.4"/>
+    <circle cx="385" cy="770" r="2.4"/><circle cx="490" cy="770" r="2.4"/><circle cx="595" cy="770" r="2.4"/>
+  </g>
+
+  <!-- chalk smudges for realism -->
+  <g fill="#ffffff" opacity="0.12">
+    <ellipse cx="160" cy="520" rx="22" ry="12"/>
+    <ellipse cx="420" cy="300" rx="18" ry="10"/>
+    <ellipse cx="300" cy="140" rx="26" ry="12"/>
+  </g>
+
+  <rect width="700" height="800" fill="url(#shade)"/>
+</svg>

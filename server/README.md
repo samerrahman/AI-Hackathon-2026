@@ -1,52 +1,17 @@
-# Stu API boundary
+# Miso API boundary
 
-`index.ts` serves the API on loopback port 3001 and serves `dist/` after a production build. Vite proxies `/api` during development. Configure `.env` using `.env.example`; private keys must never use a `VITE_` prefix. StepFun is the active live provider for study and audio, with no alternate-service fallback.
+`index.ts` serves the API on loopback port 3001 and serves `dist/` after a production build. The Vite development server proxies `/api` to it. Set `.env` from `.env.example`; never prefix private keys with `VITE_`.
 
-## Text turns and sources
+Live study uses Gemini `generateContent` with server-side Zod validation of its JSON schema, source IDs, and exact challenge quotes. The model is configurable. No live call is replaced with a demo response on error. Missing credentials produce a setup message. The optional OpenAI transcription and speech endpoints use multipart audio and MP3 output respectively. Voice recordings stay in memory only while being transcribed.
 
-`POST /api/concepts` validates the extracted document collection, obtains an editable outline, and returns a session-scoped collection ID. `CollectionCache` retains at most 30 collections in process memory, with a sliding one-hour expiry. It stores extracted sources, not uploaded PDF binaries. A server restart or expiry returns `COLLECTION_EXPIRED`; the browser reconnects its saved document data before retrying. Deleting a session clears the corresponding cache and revision guard.
+Provider contracts were checked against [Gemini generation configuration](https://ai.google.dev/api/generate-content), [OpenAI transcription](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create), and [OpenAI speech](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create). Credential presence does not establish model access; the UI reports request errors without exposing provider bodies or credentials.
 
-`POST /api/turn` accepts `Accept: text/event-stream` and emits `ready`, `text`, `complete`, or `error` events. Each event includes session, turn, revision, and concept identifiers. The browser rejects stale identifiers; disconnecting aborts provider work. Response headers disable proxy buffering and transformation. Deployments must also preserve streaming through their own reverse proxy.
+The browser keeps documents, history, source references, and evidence in IndexedDB. Relevant extracted passages and recent conversation are sent to Gemini for live turns; source text is sent for outline extraction. Audio is sent to OpenAI only for requested voice operations. These calls are subject to the providers' account retention settings; deleting local data cannot retract already processed provider requests. Miso does not upload PDFs to a remote provider file store or persist recordings on the server.
 
-`stepfun-provider.ts` calls `POST {STEPFUN_BASE_URL}/chat/completions` directly, using `STEPFUN_API_KEY` and configurable `STEPFUN_MODEL` (default `step-3.7-flash`). See StepFun’s [Chat API](https://platform.stepfun.ai/docs/en/api-reference/chat/chat-completion-create), [structured outputs](https://platform.stepfun.ai/docs/en/guides/developer/json-mode), and [streaming guide](https://platform.stepfun.ai/docs/en/guides/developer/stream). `STEPFUN_REASONING_EFFORT` defaults to `low`; it is sent only for recognized models with documented reasoning controls, including the default model.
+Private pending challenge answers are kept in an authenticated AES-GCM state token, bound to the session and the actual document text. The browser persists that opaque token. `.miso/state-key` is generated with restricted permissions and must remain private and stable across restarts. `SESSION_SECRET` can supply a stable deployment secret. The server has no session database; deleting a browser session removes its originals and derived data there, while the deletion endpoint clears the transient server revision guard.
 
-Ordinary conversational turns use one primary request with retrieved passages, eight recent messages, and compact memory. Reply text is extracted from the streamed structured output only after its source and action header is validated. Provider reasoning fields, raw JSON, and private assessment fields never reach chat. Full Zod and source validation still runs before committing evidence and state. A malformed or interrupted stream leaves the draft recoverable.
+The cadence controller permits at most one deliberate challenge in three substantial typed/transcribed exchanges (six in Gentle mode). Independent verification must approve a candidate before display. A pending challenge is resolved deterministically before skip, finish, concept change, or disabling challenges, even without an available provider. An accepted false paraphrase gets a hint and then its accurate correction, never positive evidence. This is educational model review, not formal verification.
 
-Challenge candidates are withheld until a separate verifier approves their accurate correction and exact source support. This intentionally adds a call to those turns. Uncertain candidates become clarification rather than an unverified intentional mistake. The controller prevents simultaneous unresolved challenges and guarantees resolution before skip, finish, concept change, or disabling challenges—even if the provider becomes unavailable. An accepted false paraphrase never becomes positive evidence. Model verification is not formal proof.
+The synthetic sample adapter is deliberately separate and conservative. It recognizes a limited set of clear sample explanations; unfamiliar wording is marked unassessed rather than declared wrong. It never evaluates arbitrary uploaded notes. A live provider is required for general document-derived assessment.
 
-Numeric diagnostics include request receipt delay, retrieval/preparation time, first provider chunk, first visible text, completion time, per-call timings, and reported token counts. First chunks may contain reasoning and are measured separately from visible reply text. The client emits `stu:turn-timing` for diagnostics. Do not log prompts, raw responses, keys, lecture content, or recordings. The [measured comparison](../README.md#streaming-memory-and-latency) records first reply arrival at 15.437s before and 4.346s after streaming plus the model/reasoning change; these are individual synthetic runs, not guaranteed performance.
-
-## StepFun audio
-
-Both audio routes use the existing same-origin API boundary, bounded requests, cancellation on disconnect, and the server key. The complete typed path remains available on permission, transcription, synthesis, or playback failures.
-
-| Variable | Default / purpose |
-| --- | --- |
-| `VOICE_PROVIDER` | `stepfun`; set `off` to disable audio |
-| `STEPFUN_API_KEY` | Shared server credential for text and audio |
-| `STEPFUN_BASE_URL` | `https://api.stepfun.ai/v1` |
-| `STEPFUN_AUDIO_BASE_URL` | Optional audio override; otherwise the shared base URL |
-| `STEPFUN_TRANSCRIBE_MODEL` | `stepaudio-3-asr-max` |
-| `STEPFUN_TTS_MODEL` | `stepaudio-3-tts` |
-| `STEPFUN_TTS_VOICE` | `vibrant-youth` |
-| `STEPFUN_AUDIO_LANGUAGE` | `en` |
-
-Use the endpoint matching the account; Step Plan documents `https://api.stepfun.ai/step_plan/v1` for audio. Presence of a key is not proof of audio model access.
-
-`POST /api/transcribe` receives a recording as multipart data from the browser. The adapter validates actual audio-container bytes and converts the request to StepFun’s [ASR JSON/SSE format](https://platform.stepfun.ai/docs/en/api-reference/audio/asr-sse): `POST {base}/audio/asr/sse` with Base64 audio, nested `audio.input.transcription`, and `audio.input.format`. This is not an OpenAI multipart transcription request. Supported validated containers are WAV, OGG, MP3, and M4A. WebM is rejected, never renamed as WAV. The browser produces PCM WAV. Only `transcript.text.done` becomes an editable transcript; incomplete deltas are never submitted as an answer. The transcription deadline is 60 seconds.
-
-`POST /api/speech` accepts displayed reply text, normalizes spoken notation, and calls StepFun’s [speech API](https://platform.stepfun.ai/docs/en/api-reference/audio/create-audio) at `POST {base}/audio/speech`. Global delivery uses the separate `instruction` field. Parenthetical content is converted to explicit spoken grouping because StepFun otherwise treats it as an unspoken direction. Normalization covers common mathematical notation without changing the displayed reply; it is not a universal math-to-speech system.
-
-TTS requests use WAV at 24 kHz and at most 1,000 characters per provider request. Multiple outputs are assembled from validated PCM samples, not concatenated WAV headers. The app caps input at 4,096 characters and synthesis at 120 seconds. The browser queues at most 350 characters per sentence-sized chunk and prefetches one next chunk while playing the current one; cancellation clears both playback and queued requests. Text streaming does not wait for audio. Do not add `stream_format: "audio"` to these WAV requests: the configured live service rejects that combination. The native Realtime API is not used.
-
-Live access was verified using one synthetic sentence: `stepaudio-3-tts` with `vibrant-youth` returned valid WAV in **3.355s**, and `stepaudio-3-asr-max` transcribed that WAV correctly in **1.571s**. These measurements are individual calls and do not establish real microphone quality or sustained performance. Seven focused audio tests cover wire contracts, actual formats, final SSE handling, math grouping, cancellation, safe errors, and WAV assembly.
-
-## Saved state and privacy
-
-The browser stores documents, references, conversation, draft, and evidence in IndexedDB. Server-private memory and pending correction answers are bound to the session and actual source text in an authenticated AES-GCM token. Memory retains at most eight whole explanation/correction records within 8,000 serialized characters. It distinguishes independently explained content, supported work, source-resolved corrections, and unresolved misconceptions; a resolved source claim does not automatically establish that the user understood it.
-
-The existing `.miso/state-key` path remains stable to preserve saved sessions. Keep this generated key private, or use `SESSION_SECRET` for a stable deployment secret. There is no durable server session database. Local deletion removes originals and derived browser data; it cannot retract content already sent to StepFun. Raw recordings are not persisted. Provider account retention settings apply.
-
-Configured collection limits: five files, 20 MB per file, 100 pages per file, and 300,000 total extracted characters. Recording limits: three minutes and 12 MB. No OCR or vision extraction is implemented. Source annotations use validated IDs and real extraction geometry; unreliable geometry falls back to a page and quote.
-
-Sample mode remains visibly separate and conservative. It evaluates only the bundled synthetic fixtures and marks unfamiliar wording unassessed. It never evaluates arbitrary uploaded notes or silently replaces failed live responses.
+Configured collection limits: five files; 20 MB per file; 100 pages per file; 300,000 total extracted characters. Audio limit: 12 MB per recording. No OCR or vision extraction is implemented; unreliable extraction is surfaced by the client, and text-source precision is limited to its real geometry.

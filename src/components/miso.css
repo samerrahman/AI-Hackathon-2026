@@ -1,15 +1,16 @@
-.miso-character {
-  flex: 0 0 auto;
-  display: block;
-  position: relative;
-  overflow: hidden;
-  background-image: url('/assets/miso-expression-atlas.png');
-  background-size: 300% 200%;
-  background-repeat: no-repeat;
-  transform-origin: 50% 90%;
-  user-select: none;
-  pointer-events: none;
-}
+.miso-character { flex:0 0 auto; display:block; overflow:visible; transform-origin:50% 88%; user-select:none; pointer-events:auto; touch-action:manipulation; cursor:pointer; outline:none; }
+.miso-character:focus-visible { outline:none; }
+.miso-character:focus-visible .stu-head { stroke:#c65f4e; stroke-width:2.5px; }
+.stu-stretch { transform-box:fill-box; transform-origin:center; transform:scale(1); will-change:transform; }
+.miso-character--bounce { animation:stu-liquid-bounce 620ms cubic-bezier(.2,.85,.3,1); }
+@keyframes stu-liquid-bounce { 0%,100%{transform:scale(1) rotate(0)} 24%{transform:scale(1.08,.92) rotate(-2deg)} 48%{transform:scale(.95,1.05) rotate(1.4deg)} 70%{transform:scale(1.025,.98) rotate(-.6deg)} 86%{transform:scale(.99,1.01) rotate(.2deg)} }
+.stu-head { filter:drop-shadow(0 5px 0 #e3a63138); }
+.stu-head { fill:#ffca4f; }
+.stu-curl { fill:none; stroke:#d79812; stroke-width:8; stroke-linecap:round; }
+.stu-eye-white { fill:#fff; }
+.stu-eye,.stu-mouth { fill:#17152f; }
+.stu-line { fill:none; stroke:#17152f; stroke-width:6; stroke-linecap:round; stroke-linejoin:round; }
+.stu-mouth-line { stroke-width:6.5; }
 
 .miso-character--listening {
   animation: miso-attend 380ms ease-out 1 both;
@@ -23,34 +24,8 @@
   animation: miso-nod 520ms ease-out 1 both;
 }
 
-.miso-character--realization {
-  animation: stu-realize 620ms ease-out 1 both;
-}
-
-.miso-character--puzzled {
-  animation: stu-tilt 650ms ease-in-out 1 both;
-}
-
 .miso-character--speaking {
-  animation: stu-talk 650ms ease-in-out infinite;
-}
-
-@keyframes stu-tilt {
-  0% { transform: rotate(0deg); }
-  45%, 70% { transform: rotate(-5deg) translateY(-1px); }
-  100% { transform: rotate(-2deg); }
-}
-
-@keyframes stu-realize {
-  0%, 100% { transform: translateY(0) scale(1); }
-  35% { transform: translateY(-4px) scale(1.025); }
-  65% { transform: translateY(1px) scale(0.995); }
-}
-
-@keyframes stu-talk {
-  0%, 100% { transform: translateY(0) scaleY(1); }
-  40% { transform: translateY(-1px) scaleY(1.008); }
-  70% { transform: translateY(1px) scaleY(0.995); }
+  animation: miso-settle 320ms ease-out 1 both;
 }
 
 @keyframes miso-attend {

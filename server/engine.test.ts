@@ -145,6 +145,9 @@ test('malformed provider output is rejected and request data is sent under an un
     await assert.rejects(new GeminiProvider('test-key').concepts([source]), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
     assert.match(sent, /UNTRUSTED STUDY DATA/);
     assert.match(sent, /fresh-p2-s1/);
+    assert.match(sent, /student is the teacher and you are the learner/);
+    assert.match(sent, /never mention documents, PDFs, filenames, pages, citations/);
+    assert.match(sent, /Ask exactly one focused question at a time/);
     assert.ok(!sent.includes('test-key'));
   } finally { globalThis.fetch = original; }
 });

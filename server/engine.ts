@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { AssessmentResult, ConceptRequest, EvidenceRecord, SourceSpan, TurnRequest } from '../shared/types.js';
 import { ApiError, LIMITS, assessmentSchema, outlineSchema, verificationSchema } from './schema.js';
-import { decodeState, encodeState, remember, type EngineState, type PendingChallenge } from './state.js';
-import { relevantSources, type StudyProvider, type ProviderOptions } from './provider.js';
+import { decodeState, encodeState, type EngineState, type PendingChallenge } from './state.js';
+import { relevantSources, type StudyProvider } from './provider.js';
 
 export function validateSources(documents: ConceptRequest['documents']): SourceSpan[] {
   const documentIds = new Set<string>();
@@ -79,8 +79,7 @@ function evidence(request: TurnRequest, state: EngineState, kind: EvidenceRecord
   return { id: `${request.turnId}:${kind}:${conceptId}`, conceptId, turnId: request.turnId, kind, summary, studentText: request.text, sourceIds, support, independently: (kind === 'explained' || kind === 'corrected') && (support === 'none' || support === 'question') };
 }
 
-export async function runTurn(request: TurnRequest, provider: StudyProvider, options:ProviderOptions & {onContext?:(ms:number)=>void} = {}): Promise<AssessmentResult> {
-  const contextStart=performance.now();
+export async function runTurn(request: TurnRequest, provider: StudyProvider): Promise<AssessmentResult> {
   const all = validateSources(request.documents);
   requireReferences(request.concept.sourceIds, all);
   const selection = validateSelection(request, all);
@@ -99,24 +98,23 @@ export async function runTurn(request: TurnRequest, provider: StudyProvider, opt
     state.statuses[pending.conceptId] = studentCorrected ? (supported ? 'explained-with-support' : 'explained-independently') : 'needs-another-pass';
     if (!studentCorrected) state.support[pending.conceptId] = 'explanation';
     records.push(evidence(request, state, studentCorrected ? 'corrected' : 'review', `${studentCorrected ? 'You clarified: ' : 'Review: '}${pending.correction}`, pending.sourceIds, pending.conceptId));
-    remember(state, { conceptId: pending.conceptId, kind: 'correction', statement: pending.correction, sourceIds: pending.sourceIds, support: state.support[pending.conceptId] || 'none', studentCorrected });
     return { text: `${prefix}${pending.correction}`, correction: { statement: pending.correction, sourceIds: pending.sourceIds, studentCorrected }, sources: pending.sourceIds };
   };
 
   // No network dependency can leave a false statement unresolved on exit or concept change.
   if (state.pending && (request.action === 'end' || request.action === 'skip' || request.action === 'explain' || request.concept.id !== state.pending.conceptId || request.settings.challenges === 'off')) {
-    const resolved = resolvePending(false, 'Wait, I need to fix my mix-up before we move on. ');
+    const resolved = resolvePending(false, 'Before we move on, the accurate version is: ');
     state.activeConceptId = request.concept.id;
     const next = request.action === 'end' ? 'recap' : request.action === 'skip' ? 'advance' : request.action === 'explain' ? 'explain' : 'invite';
-    const question = next === 'invite' ? ` ${request.concept.question}` : '';
+    const question = next === 'invite' ? ` ${request.concept.question}` : next === 'explain' ? ' You can explain that distinction back in your own words whenever you’re ready.' : '';
     return result(resolved.text + question, next, resolved.sources, { resolvedCorrection: resolved.correction });
   }
   state.activeConceptId = request.concept.id;
-  if (request.action === 'end') return result('I’ve saved where we got to, including the bits we untangled together. We can pick up from here next time.', 'recap');
+  if (request.action === 'end') return result('Your recap keeps the explanations, corrections, and help you actually worked through. Pick up with the review items next time.', 'recap');
   if (request.action === 'skip') {
     state.statuses[request.concept.id] = 'needs-another-pass';
     records.push(evidence(request, state, 'review', `Return to ${request.concept.title}.`, request.concept.sourceIds));
-    return result('Let’s leave a bookmark here and come back to it.', 'advance');
+    return result('We’ll keep this idea for another pass. You can choose the next concept when you’re ready.', 'advance');
   }
   if (request.action === 'start' && !state.pending) {
     state.statuses[request.concept.id] ||= 'explaining';
@@ -125,37 +123,32 @@ export async function runTurn(request: TurnRequest, provider: StudyProvider, opt
   if ((request.action === 'answer' || request.action === 'accept') && !request.text.trim() && request.action !== 'accept') return result('I didn’t catch an explanation yet. Type it here or record a short explanation, then review the transcript.', 'clarify');
   if (request.action === 'answer' && request.text.trim().split(/\s+/).length >= 5) state.substantialTurns++;
   const sources = relevantSources(all, request.concept, request.text, request.selection?.spanIds, state.pending?.sourceIds);
-  options.onContext?.(performance.now()-contextStart);
 
   if (state.pending && (request.action === 'accept' || request.action === 'hint' || request.action === 'source')) {
     const pending = state.pending;
     if (request.action === 'accept' && pending.attempts >= 1) {
-      const resolved = resolvePending(false, 'Wait, I had that wrong. ');
-      return result(resolved.text, 'explain', resolved.sources, { resolvedCorrection: resolved.correction });
+      const resolved = resolvePending(false, 'There is one distinction to keep: ');
+      return result(`${resolved.text} Try restating it with that condition included.`, 'explain', resolved.sources, { resolvedCorrection: resolved.correction });
     }
     if (request.action === 'accept') pending.attempts++;
     state.support[request.concept.id] = request.action === 'source' ? 'source' : 'hint';
     records.push(evidence(request, state, 'help', request.action === 'source' ? `Opened a supporting passage for ${request.concept.title}.` : `Used a focused hint for ${request.concept.title}.`, pending.sourceIds));
-    return result(request.action === 'source' ? `This is the passage I’m puzzling over. ${pending.hint}` : pending.hint, request.action === 'source' ? 'source' : 'hint', pending.sourceIds, { character: 'puzzled' });
+    return result(request.action === 'source' ? `Look at the highlighted passage. ${pending.hint}` : pending.hint, request.action === 'source' ? 'source' : 'hint', pending.sourceIds, { character: 'puzzled' });
   }
 
   const canChallenge = request.action === 'answer' && challengeIsAllowed(state, request.settings.challenges);
-  const assessment = assessmentSchema.parse(await provider.assess({ request, state, sources, challengeAllowed: canChallenge, ...options,
-    // Pending corrections resolve in the controller. The provider's validated
-    // header withholds actual challenges while ordinary eligible turns can stream.
-    onText: state.pending ? undefined : options.onText,
-  }));
+  const assessment = assessmentSchema.parse(await provider.assess({ request, state, sources, challengeAllowed: canChallenge }));
   requireReferences(assessment.sourceIds, sources);
 
   if (state.pending) {
     const pending = state.pending;
     if (assessment.correctionAccepted && assessment.judgment === 'correct') {
-      const resolved = resolvePending(true, 'Oh, I had that mixed up. ');
-      return result(resolved.text, 'advance', resolved.sources, { resolvedCorrection: resolved.correction, character: 'pleased' });
+      const resolved = resolvePending(true, 'You caught the distinction. The accurate version is: ');
+      return result(`${resolved.text} ${state.support[request.concept.id] ? 'Try applying that distinction to a fresh example.' : 'That correction is saved with its source.'}`, 'advance', resolved.sources, { resolvedCorrection: resolved.correction, character: 'pleased' });
     }
     if (pending.attempts >= 1) {
-      const resolved = resolvePending(false, 'I need to fix what I said. ');
-      return result(resolved.text, 'explain', resolved.sources, { resolvedCorrection: resolved.correction });
+      const resolved = resolvePending(false, 'Let’s close the loop. The accurate version is: ');
+      return result(`${resolved.text} You can give that idea another pass in your own words.`, 'explain', resolved.sources, { resolvedCorrection: resolved.correction });
     }
     pending.attempts++;
     state.support[request.concept.id] = 'hint';
@@ -173,7 +166,6 @@ export async function runTurn(request: TurnRequest, provider: StudyProvider, opt
     const supported = state.support[request.concept.id] && !['none', 'question'].includes(state.support[request.concept.id]);
     state.statuses[request.concept.id] = supported ? 'explained-with-support' : 'explained-independently';
     records.push(evidence(request, state, 'explained', assessment.strength, assessment.sourceIds));
-    remember(state, { conceptId: request.concept.id, kind: 'explanation', statement: assessment.strength, sourceIds: assessment.sourceIds, support: state.support[request.concept.id] || 'none' });
   } else if (assessment.judgment === 'partial' || assessment.judgment === 'incorrect') {
     state.statuses[request.concept.id] = 'needs-another-pass';
     if (assessment.gap) records.push(evidence(request, state, 'review', assessment.gap, assessment.sourceIds));
@@ -184,7 +176,7 @@ export async function runTurn(request: TurnRequest, provider: StudyProvider, opt
     let approved = false;
     if (candidate && canChallenge && assessment.judgment === 'correct' && supportedQuote(candidate, sources)) {
       try {
-        const verification = verificationSchema.parse(await provider.verify(candidate, sources, {signal:options.signal,onMetrics:options.onMetrics}));
+        const verification = verificationSchema.parse(await provider.verify(candidate, sources));
         requireReferences(verification.sourceIds, sources);
         approved = verification.verdict === 'approved' && verification.sourceIds.every(id => candidate.sourceIds.includes(id));
       } catch { approved = false; }
@@ -195,7 +187,7 @@ export async function runTurn(request: TurnRequest, provider: StudyProvider, opt
       return result(candidate.candidate, 'challenge', candidate.sourceIds, { label: 'Check my understanding', character: 'neutral' });
     }
     // A rejected candidate's text is never shown, even if the presentation fields repeated it.
-    return result('I’m keeping your explanation alongside this passage while I sort that out.', 'follow-up', assessment.sourceIds);
+    return result('Your explanation is saved. Which condition or limitation in this passage matters most to your reasoning?', 'follow-up', assessment.sourceIds);
   }
   return result(assessment.visibleText, assessment.nextAction, assessment.sourceIds, {
     spokenText: assessment.spokenText || undefined,

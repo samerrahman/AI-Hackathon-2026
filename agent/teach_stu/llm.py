@@ -34,7 +34,7 @@ def _model(role: str, provider: str) -> str:
         return override
     if provider == "anthropic":
         return "claude-opus-5-5" if role == "judge" else "claude-haiku-5-5"
-    return os.getenv("ASI_MODEL", "asi1")
+    return "asi1" if role == "judge" else "asi1-mini"
 
 
 def describe() -> str:

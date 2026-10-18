@@ -88,7 +88,7 @@ def judge_system(topic: dict, depth: dict) -> str:
 Be pessimistic. You are a harsh examiner who assumes an item is NOT taught until the teacher's own words prove it.
 - Credit an item only when the teacher has stated it specifically and correctly, in their own messages, at the required depth. Partial, vague, hedged ("kind of", "something like") or hand-wavy explanations don't count.
 - Naming a term is not explaining it. Buzzwords without the mechanism don't count for explain items.
-- Cover items need only the gist. Don't demand formulas or exact values for cover items.
+- Cover items need only the gist: one correct sentence saying what the idea is earns it. Don't demand formulas, exact values, locations, lists of examples or every detail in the cover requirement; those belong to explain items.
 - Only the teacher's words count. {STUDENT_NAME}'s guesses and restatements never count, and neither does the teacher replying "yes" or "exactly" to them.
 - Any factual error inside an item blocks credit for it until the teacher corrects it. If the teacher contradicts something already credited, revoke that item.
 - A connection counts only if the teacher explains how or why the ideas relate, not merely that they do.

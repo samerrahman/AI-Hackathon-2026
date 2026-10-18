@@ -20,10 +20,10 @@ ASI:One chat ──Agent Chat Protocol──▶ teach-stu uAgent (Agentverse mai
                       100% ──▶ RE-LEARN: Stu explains back in your words + quizzes you
 ```
 
-- **Judge** (stronger model, Claude if `ANTHROPIC_API_KEY` is set, else ASI:One):
+- **Judge** (stronger model: Claude if `ANTHROPIC_API_KEY` is set, else ASI:One `asi1`):
   credits only specific, correct statements at the chosen depth, with a verbatim quote.
   Stu's restatements and "yes, exactly" never count; errors block credit; contradictions revoke it.
-- **Stu** (fast model): never sees the notes or rubric, so he can't leak answers.
+- **Stu** (fast model, ASI:One `asi1-mini`): never sees the notes or rubric, so he can't leak answers.
 - The user only sees one progress bar ("Stu learned something!" at most). `debug on` reveals
   the judge's verdicts, quotes, problems and Stu's planted mistakes under each reply.
 - **Interactive cards**: a form card for topic setup and a review card to start teaching.

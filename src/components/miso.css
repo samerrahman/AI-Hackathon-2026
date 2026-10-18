@@ -47,13 +47,13 @@
   70% { transform: translateY(-1px) rotate(0deg); }
 }
 
-.miso-character--still {
+.miso-character--still, .miso-character.miso-character--still {
   animation: none;
   transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .miso-character {
+  .miso-character, .miso-character.miso-character--bounce {
     animation: none;
     transform: none;
   }

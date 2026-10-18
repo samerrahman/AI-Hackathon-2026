@@ -70,10 +70,21 @@ function isShortAffirmation(text: string): boolean {
   const plain = text.toLowerCase().replace(/[^a-z\s]/g, '').trim().replace(/\s+/g, ' ');
   return /^(yes|yep|yeah|exactly|right|correct|sure|ok|okay|i agree|you got it|thats right|that is right|sounds right|yes exactly|yes thats right|yes that is right)$/.test(plain);
 }
+// Models copy quotes with small formatting drift (curly quotes, spacing, case, a trailing "…"). Compare
+// normalized text so a real quote still counts; an invented or reworded quote still fails.
+function normalizedQuote(text: string): string {
+  return text.normalize('NFKC').replace(/[\u2018\u2019\u201B\u2032]/g, "'").replace(/[\u201C\u201D\u201F\u2033]/g, '"').replace(/[\u2010-\u2015]/g, '-')
+    .replace(/(\.{3}|\u2026)/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim().replace(/^[\s"',;:.-]+|[\s"',;:.-]+$/g, '');
+}
+function quotedFrom(message: Message, quote: string): boolean {
+  if (message.text.includes(quote)) return true;
+  const needle = normalizedQuote(quote);
+  return needle.length >= 3 && normalizedQuote(message.text).includes(needle);
+}
 function validEvidence(e: Evidence, messages: Message[], itemIds: Set<string>, used: Set<string>): boolean {
   if (!itemIds.has(e.rubricItemId)) return false;
   const message = messages.find(m => m.id === e.teacherMessageId && m.role === 'user');
-  if (!message || !message.text.includes(e.quote) || isShortAffirmation(message.text)) return false;
+  if (!message || !quotedFrom(message, e.quote) || isShortAffirmation(message.text)) return false;
   const key = `${e.rubricItemId}\0${e.teacherMessageId}\0${e.quote}`;
   if (used.has(key)) return false;
   used.add(key);
@@ -81,7 +92,7 @@ function validEvidence(e: Evidence, messages: Message[], itemIds: Set<string>, u
 }
 function validatedAnchor(anchor: { teacherMessageId: string; anchorQuote: string }, messages: Message[]): boolean {
   const message = messages.find(m => m.id === anchor.teacherMessageId && m.role === 'user');
-  return Boolean(message && message.text.includes(anchor.anchorQuote) && !isShortAffirmation(message.text));
+  return Boolean(message && quotedFrom(message, anchor.anchorQuote) && !isShortAffirmation(message.text));
 }
 function genericFocus(latest: Message): Focus {
   return { type: 'vague', teacherMessageId: latest.id, anchorQuote: latest.text.slice(0, 160), instruction: 'ask_clarify' };

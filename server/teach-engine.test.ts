@@ -130,6 +130,18 @@ test('a failed grading keeps the message queued for the next grading; a failed S
   assert.equal(retry.judgePending, true);
 });
 
+test('a real quote copied with curly quotes, odd spacing, case or a trailing ellipsis still credits; a reworded one does not', async () => {
+  const text = "The lamp's on only when the path is closed — an open switch breaks it.";
+  let ids: string[] = [];
+  const quotes = [' THE LAMP\u2019S ON  only when\nthe path is closed \u2014 an open switch\u2026', 'the lamp works whenever the switch is open'];
+  const p = provider({ judge: input => judgeFor(input, [], [], [], { credits: ids.map((id, i) => ({ rubricItemId: id, teacherMessageId: pendingTeacher(input).id, quote: quotes[i] })) }) });
+  const created = await topic(p.instance);
+  ids = openTeachState(created.stateToken, created.topicId, [document]).rubric.slice(0, 2).map(item => item.id);
+  const graded = await teachAndGrade(created, p, text);
+  assert.equal(graded.progress.credited, 1);
+  assert.ok(openTeachState(graded.stateToken, graded.topicId, [document]).credited[ids[0]]);
+});
+
 test('only exact evidence from the messages being graded credits; affirmations, fabricated quotes, assistant text, old messages and unknown IDs are dropped', async () => {
   let itemId = '';
   const exact = provider({ judge: input => judgeFor(input, [itemId]) }); const created = await topic(exact.instance); itemId = firstItem(created);

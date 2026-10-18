@@ -2,7 +2,8 @@
 .miso-character:focus-visible { outline:none; }
 .miso-character:focus-visible .stu-head { stroke:#c65f4e; stroke-width:2.5px; }
 .stu-stretch { transform-box:fill-box; transform-origin:center; transform:scale(1); will-change:transform; }
-.miso-character--bounce { animation:stu-liquid-bounce 620ms cubic-bezier(.2,.85,.3,1); }
+/* Doubled class so the bounce beats each expression's own entrance animation, which is declared later. */
+.miso-character.miso-character--bounce { animation:stu-liquid-bounce 620ms cubic-bezier(.2,.85,.3,1); }
 @keyframes stu-liquid-bounce { 0%,100%{transform:scale(1) rotate(0)} 24%{transform:scale(1.08,.92) rotate(-2deg)} 48%{transform:scale(.95,1.05) rotate(1.4deg)} 70%{transform:scale(1.025,.98) rotate(-.6deg)} 86%{transform:scale(.99,1.01) rotate(.2deg)} }
 .stu-head { filter:drop-shadow(0 5px 0 #e3a63138); }
 .stu-head { fill:#ffca4f; }

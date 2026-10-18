@@ -1,31 +1,42 @@
 {
-  "name": "dumbai-mvp",
-  "version": "0.1.0",
+  "name": "teach-stu",
+  "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build",
-    "start": "next start --hostname 127.0.0.1",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "dev": "concurrently -k -n api,web \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
+    "build": "tsc --noEmit && vite build",
+    "start": "tsx server/index.ts",
+    "test": "node --import tsx --test server/*.test.ts src/lib/*.test.ts",
+    "check": "tsc --noEmit",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "next": "16.4.2",
-    "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "openai": "^6.0.0",
-    "zod": "^4.0.0"
+    "@fontsource-variable/dm-sans": "^5.3.0",
+    "@fontsource/libre-caslon-display": "^5.3.0",
+    "@types/multer": "^2.3.0",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "idb-keyval": "^6.2.2",
+    "katex": "^0.19.0",
+    "lucide-react": "^0.468.0",
+    "multer": "^2.4.0",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.0.0",
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "eslint": "^9.0.0",
-    "eslint-config-next": "16.4.2",
-    "tailwindcss": "4.3.3",
-    "typescript": "^5.9.0",
-    "vitest": "5.0.5"
+    "@playwright/test": "^1.64.1",
+    "@types/express": "^5.0.0",
+    "@types/katex": "^0.16.7",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
   }
 }

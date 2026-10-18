@@ -1,0 +1,58 @@
+.miso-character {
+  flex: 0 0 auto;
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background-image: url('/assets/miso-expression-atlas.png');
+  background-size: 300% 200%;
+  background-repeat: no-repeat;
+  transform-origin: 50% 90%;
+  user-select: none;
+  pointer-events: none;
+}
+
+.miso-character--listening {
+  animation: miso-attend 380ms ease-out 1 both;
+}
+
+.miso-character--thinking {
+  animation: miso-settle 400ms ease-out 1 both;
+}
+
+.miso-character--pleased {
+  animation: miso-nod 520ms ease-out 1 both;
+}
+
+.miso-character--speaking {
+  animation: miso-settle 320ms ease-out 1 both;
+}
+
+@keyframes miso-attend {
+  0% { transform: rotate(0deg); }
+  55% { transform: rotate(-2deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes miso-settle {
+  0% { transform: translateY(0); }
+  45% { transform: translateY(-2px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes miso-nod {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  38% { transform: translateY(2px) rotate(1.5deg); }
+  70% { transform: translateY(-1px) rotate(0deg); }
+}
+
+.miso-character--still {
+  animation: none;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .miso-character {
+    animation: none;
+    transform: none;
+  }
+}

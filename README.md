@@ -102,4 +102,4 @@ Vite + React 19 · Express · Zod · pdf.js · strict TypeScript · `node:test` 
 
 ## Team
 
-Built for the AI LA Hackathon 2026 by [@ruxinsheng](https://github.com/ruxinsheng), [@jamlol123](https://github.com/jamlol123), [@zenoro0](https://github.com/zenoro0), and [@samerrahman](https://github.com/samerrahman): Lucy's teaching engine, Lea's design, James's voice, and Samer's deployment and speed work.
+Built for the AI LA Hackathon 2026 by [@ruxinsheng](https://github.com/ruxinsheng), [@jamlol123](https://github.com/jamlol123), [@zenoro0](https://github.com/zenoro0), and [@samerrahman](https://github.com/samerrahman)

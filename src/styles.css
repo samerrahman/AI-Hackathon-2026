@@ -361,3 +361,21 @@ body{background:linear-gradient(180deg,#fcf8f2 0%,#f9f2e9 100%)}
 @media(max-width:360px){.talk-button{padding:0 10px;gap:5px;font-size:12px;line-height:1.15}.add-to-board{padding:0 12px}.workspace-app .brand{font-size:19px;gap:6px}.workspace-app .topbar{gap:6px}.workspace-app .header-actions{gap:6px}.workspace-app .end-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
 @media(max-height:500px) and (min-width:761px){.writing-line textarea{max-height:96px}}
 @media(max-height:500px) and (max-width:760px){.writing-line textarea{max-height:56px}}
+
+/* Your side of the board: your explanations and answers sit on the right as index cards, numbered,
+   and Stu's sticky notes stay on the left, so the conversation reads at a glance. */
+.board-entry.student-message{display:flex;justify-content:flex-end;align-items:flex-start;gap:10px;margin:14px 14px 18px 88px}
+.board-entry.student-message .entry-margin{flex:0 0 auto;min-width:28px;height:28px;padding:0 8px;border-radius:14px;background:#f6e3dc;font-size:16px;line-height:28px;text-align:center;color:#a84a39}
+.board-entry.student-message .entry-body{min-width:0;max-width:min(620px,100%);padding:10px 16px 12px;background:#fffdf9;border:1px solid #ead8cb;border-radius:14px 14px 4px 14px;box-shadow:0 1px 0 #ead8cb,0 10px 18px -14px #7a4a3088}
+.board-entry.student-message .message-bubble{max-width:none;line-height:1.65}
+.board-entry.student-message.is-pending .entry-body{border-style:dashed}
+.stu-note.your-answer{margin-left:auto;margin-right:14px}
+@media(max-width:760px){
+  .board-entry.student-message{margin:10px 6px 14px 22%;gap:8px}
+  .stu-note:not(.your-answer){max-width:min(calc(100% - 30px),85%)}
+  .stu-note.your-answer{max-width:85%}
+  .board-entry.student-message .entry-margin{min-width:24px;height:24px;font-size:14px;line-height:24px;padding:0 6px}
+  .board-entry.student-message .entry-body{padding:8px 12px 10px}
+  .board-entry.student-message .message-bubble{line-height:1.6}
+  .stu-note.your-answer{margin-right:6px}
+}

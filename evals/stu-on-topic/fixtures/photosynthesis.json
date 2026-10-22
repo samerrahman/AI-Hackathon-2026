@@ -1,0 +1,67 @@
+{
+  "title": "Photosynthesis",
+  "depth": "big-picture",
+  "mode": "live",
+  "documents": [
+    {
+      "id": "doc-941e1b273467b4b74facc467",
+      "name": "Photosynthesis",
+      "size": 3204,
+      "hash": "941e1b273467b4b74facc467d9d62af4138130719a93405ba27af552dad1406a",
+      "pageCount": 1,
+      "spans": [
+        {
+          "id": "doc-941e1b273467b4b74facc467-p0-s0",
+          "documentId": "doc-941e1b273467b4b74facc467",
+          "pageIndex": 0,
+          "text": "Photosynthesis is the process plants, algae and some bacteria use to turn light energy into chemical energy stored in sugar. The inputs are carbon dioxide, water and light; the outputs are glucose and oxygen. The overall equation is 6 CO2 + 6 H2O + light energy → C6H12O6 + 6 O2. Almost all of the food energy in ecosystems and the oxygen in the atmosphere come from photosynthesis, and plants are called producers (autotrophs) because they make their own food.",
+          "quality": "user-supplied text; section-level location",
+          "kind": "paragraph"
+        },
+        {
+          "id": "doc-941e1b273467b4b74facc467-p0-s1",
+          "documentId": "doc-941e1b273467b4b74facc467",
+          "pageIndex": 0,
+          "text": "In plants, photosynthesis happens in chloroplasts, mostly in the mesophyll cells inside leaves. Carbon dioxide enters the leaf through small pores called stomata, and water travels up from the roots through the xylem. A chloroplast has an outer and an inner membrane around a fluid called the stroma. Inside the stroma are stacks of flattened sacs called thylakoids (a stack is a granum). The light reactions happen in the thylakoid membranes, and the sugar-building reactions happen in the stroma.",
+          "quality": "user-supplied text; section-level location",
+          "kind": "paragraph"
+        },
+        {
+          "id": "doc-941e1b273467b4b74facc467-p0-s2",
+          "documentId": "doc-941e1b273467b4b74facc467",
+          "pageIndex": 0,
+          "text": "Chlorophyll is the green pigment that captures light. Chlorophyll a is the main pigment, while chlorophyll b and carotenoids are accessory pigments that widen the range of light the plant can use. Chlorophyll absorbs mostly blue-violet and red light and reflects green light, which is why leaves look green. The pigments are organized into two photosystems, photosystem II and photosystem I, where antenna pigments pass absorbed energy to a reaction center chlorophyll.",
+          "quality": "user-supplied text; section-level location",
+          "kind": "paragraph"
+        },
+        {
+          "id": "doc-941e1b273467b4b74facc467-p0-s3",
+          "documentId": "doc-941e1b273467b4b74facc467",
+          "pageIndex": 0,
+          "text": "The light-dependent reactions take place in the thylakoid membranes. Light excites electrons in photosystem II, and photosystem II replaces those electrons by splitting water. Splitting water releases oxygen as a by-product, so the oxygen plants give off comes from water, not from carbon dioxide. The excited electrons move down an electron transport chain to photosystem I, and this pumps hydrogen ions into the thylakoid space; ATP synthase uses that gradient to make ATP. Photosystem I re-energizes the electrons, which reduce NADP+ to NADPH. So the light reactions turn light energy into ATP and NADPH and release oxygen.",
+          "quality": "user-supplied text; section-level location",
+          "kind": "paragraph"
+        },
+        {
+          "id": "doc-941e1b273467b4b74facc467-p0-s4",
+          "documentId": "doc-941e1b273467b4b74facc467",
+          "pageIndex": 0,
+          "text": "The Calvin cycle (the light-independent reactions) takes place in the stroma and uses the ATP and NADPH from the light reactions to turn carbon dioxide into sugar. It has three phases. In carbon fixation, the enzyme rubisco attaches CO2 to a five-carbon sugar called RuBP. In reduction, ATP and NADPH convert the resulting three-carbon molecules into G3P, a three-carbon sugar. In regeneration, most of the G3P is used, with more ATP, to rebuild RuBP so the cycle can continue. For every three CO2 fixed, one G3P leaves the cycle, and two G3P can be combined into one glucose. The Calvin cycle does not need light directly, but it runs during the day because it depends on the products of the light reactions.",
+          "quality": "user-supplied text; section-level location",
+          "kind": "paragraph"
+        },
+        {
+          "id": "doc-941e1b273467b4b74facc467-p0-s5",
+          "documentId": "doc-941e1b273467b4b74facc467",
+          "pageIndex": 0,
+          "text": "The two stages depend on each other: the light reactions supply ATP and NADPH to the Calvin cycle, and the Calvin cycle returns ADP, phosphate and NADP+ so the light reactions can keep going. The rate of photosynthesis is limited by light intensity, carbon dioxide concentration and temperature, because the reactions are run by enzymes. Increasing one factor speeds photosynthesis up only until another factor becomes the limit.",
+          "quality": "user-supplied text; section-level location",
+          "kind": "paragraph"
+        }
+      ],
+      "warnings": [],
+      "kind": "text",
+      "processingVersion": "native-text-v4-pdfjs-6.4.299"
+    }
+  ]
+}

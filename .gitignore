@@ -11,3 +11,6 @@ server/.state-key
 test-results/
 playwright-report/
 /.worktrees/
+
+# Live eval output (transcripts, cached topics)
+evals/stu-on-topic/results/

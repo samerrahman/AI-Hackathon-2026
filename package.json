@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n api,web \"tsx watch server/dev.ts\" \"vite --host 127.0.0.1\"",
-    "build": "tsc --noEmit && vite build",
+    "dev": "concurrently -k -n api,web \"tsx watch server/dev.ts\" \"vite --config web/vite.config.ts --host 127.0.0.1\"",
+    "build": "tsc --noEmit && vite build --config web/vite.config.ts",
     "start": "tsx server/dev.ts",
-    "test": "node --import tsx --test server/*.test.ts src/lib/*.test.ts",
+    "test": "node --import tsx --test server/*.test.ts web/src/lib/*.test.ts",
     "check": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test -c tests/playwright.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",

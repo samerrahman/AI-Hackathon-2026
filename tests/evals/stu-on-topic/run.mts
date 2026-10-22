@@ -1,20 +1,20 @@
 // Live eval: does Stu stay on the topic of the original notes? See README.md.
-//   npx tsx evals/stu-on-topic/run.mts --label <name> [--turns 6] [--only <id,...>] [--concurrency 3] [--fresh-topics]
+//   npx tsx tests/evals/stu-on-topic/run.mts --label <name> [--turns 6] [--only <id,...>] [--concurrency 3] [--fresh-topics]
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { ZodError } from 'zod';
-import { ApiError } from '../../server/schema.js';
-import { createTeachTopic, openTeachState, runJudgeTurn, runTeachTurn, type TeachResponse } from '../../server/teach-engine.js';
-import { StepFunTeachProvider, type BriefInput, type JudgeInput, type ModelResult, type StuInput, type TeachProvider } from '../../server/teach-provider.js';
-import type { SourceSpan } from '../../shared/types.js';
-import { createTopicSchema, judgeTurnSchema, teachTurnSchema, type CreateTopicRequest, type Depth, type JudgeResult, type RelearnBrief, type StuResult } from '../../server/teach-schema.js';
+import { ApiError } from '../../../server/schema.js';
+import { createTeachTopic, openTeachState, runJudgeTurn, runTeachTurn, type TeachResponse } from '../../../server/teach-engine.js';
+import { StepFunTeachProvider, type BriefInput, type JudgeInput, type ModelResult, type StuInput, type TeachProvider } from '../../../server/teach-provider.js';
+import type { SourceSpan } from '../../../shared/types.js';
+import { createTopicSchema, judgeTurnSchema, teachTurnSchema, type CreateTopicRequest, type Depth, type JudgeResult, type RelearnBrief, type StuResult } from '../../../server/teach-schema.js';
 import { PERSONAS, moveFor, teacherMessage, teacherModel, type ChatLine, type Move, type Persona } from './teacher.mts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repo = join(here, '..', '..');
+const repo = join(here, '..', '..', '..');
 const FIXTURES = ['experiments', 'sequences', 'photosynthesis', 'supply-and-demand'] as const;
 type Fixture = typeof FIXTURES[number];
 
@@ -23,7 +23,7 @@ const { values: args } = parseArgs({ options: {
   label: { type: 'string' }, turns: { type: 'string', default: '6' }, only: { type: 'string' },
   concurrency: { type: 'string', default: '3' }, 'fresh-topics': { type: 'boolean', default: false },
 } });
-if (!args.label || !/^[\w.-]+$/.test(args.label)) { console.error('Usage: npx tsx evals/stu-on-topic/run.mts --label <name> [--turns N] [--only id,...] [--concurrency 3] [--fresh-topics]'); process.exit(2); }
+if (!args.label || !/^[\w.-]+$/.test(args.label)) { console.error('Usage: npx tsx tests/evals/stu-on-topic/run.mts --label <name> [--turns N] [--only id,...] [--concurrency 3] [--fresh-topics]'); process.exit(2); }
 const TURNS = Math.max(1, Number(args.turns) || 6);
 const CONCURRENCY = Math.max(1, Number(args.concurrency) || 3);
 if (existsSync(join(repo, '.env'))) process.loadEnvFile(join(repo, '.env'));

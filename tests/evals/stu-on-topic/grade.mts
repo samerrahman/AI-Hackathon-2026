@@ -1,6 +1,6 @@
 // Grades a finished run: an auditor model labels every Stu reply for whether it stays inside the notes,
 // and whether Stu or the teacher pulled the chat away. Writes results/<label>/grades.json.
-//   npx tsx evals/stu-on-topic/grade.mts --label <name> [--model step-5-preview] [--concurrency 3]
+//   npx tsx tests/evals/stu-on-topic/grade.mts --label <name> [--model step-5-preview] [--concurrency 3]
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,9 +9,9 @@ import { z } from 'zod';
 import { chat } from './stepfun.mts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repo = join(here, '..', '..');
+const repo = join(here, '..', '..', '..');
 const { values: args } = parseArgs({ options: { label: { type: 'string' }, model: { type: 'string' }, concurrency: { type: 'string', default: '3' } } });
-if (!args.label || !/^[\w.-]+$/.test(args.label)) { console.error('Usage: npx tsx evals/stu-on-topic/grade.mts --label <name> [--model step-5-preview] [--concurrency 3]'); process.exit(2); }
+if (!args.label || !/^[\w.-]+$/.test(args.label)) { console.error('Usage: npx tsx tests/evals/stu-on-topic/grade.mts --label <name> [--model step-5-preview] [--concurrency 3]'); process.exit(2); }
 if (existsSync(join(repo, '.env'))) process.loadEnvFile(join(repo, '.env'));
 const MODEL = args.model || process.env.EVAL_GRADER_MODEL || 'step-5-preview';
 const runDir = join(here, 'results', args.label);

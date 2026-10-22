@@ -13,4 +13,4 @@ playwright-report/
 /.worktrees/
 
 # Live eval output (transcripts, cached topics)
-evals/stu-on-topic/results/
+tests/evals/stu-on-topic/results/

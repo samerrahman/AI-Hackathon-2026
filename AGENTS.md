@@ -15,7 +15,7 @@ progress bar; once everything is taught, the chat flips to re-learn mode.
 The UI design (palette, SVG Stu with expressions, chat workspace, landing page) comes from Lea's
 `lea2` branch; the teaching engine and flow are Lucy's. Notes live in a **Notes** tab beside the chat.
 
-Stack: Vite + React (`src/`), Express API (`server/`), shared types (`shared/`), strict
+Stack: Vite + React (`web/`), Express API (`server/`, deployed through `api/`), shared types (`shared/`), strict
 TypeScript, Zod, `node:test`, Playwright. Without `STEPFUN_API_KEY`, use **Try a sample session**.
 See `README.md` and `server/README.md` for the state and evidence rules.
 
@@ -55,4 +55,4 @@ Any architectural choice (framework, API shape, data model, env var) goes in
 agents learn about it.
 
 ## Commands
-`npm ci` · `npm run dev` (web on 127.0.0.1:5173, API on :3001) · `npm run check` · `npm test` · `npm run build` · `npm run test:e2e`
+`npm ci` · `npm run dev` (web on 127.0.0.1:5173, API on :3001) · `npm run check` · `npm test` · `npm run build` · `npm run test:e2e` (Playwright; config in `tests/`)

@@ -1,12 +1,12 @@
 // Rebuilds the two hand-written fixtures (pasted notes and no notes) as POST /api/topic bodies.
 // The two PDF fixtures were captured from the real browser upload flow instead (see README.md).
-//   npx tsx evals/stu-on-topic/make-fixtures.mts
+//   npx tsx tests/evals/stu-on-topic/make-fixtures.mts
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { SourceSpan, StudyDocument } from '../../shared/types.js';
+import type { SourceSpan, StudyDocument } from '../../../shared/types.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pdfjsVersion = (createRequire(import.meta.url)('pdfjs-dist/package.json') as { version: string }).version;

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, ChevronRight, ClipboardList, FileText, Hand, HelpCircle, Lightbulb, LoaderCircle, MessageCircle, Mic, Pause, Pencil, Plus, Presentation, Settings2, ShieldCheck, Square, Trash2, Undo2, Upload, Volume2, VolumeX, X } from 'lucide-react';
-import type { AppConfig, CharacterState, SelectionContext, StudyDocument } from '../shared/types';
+import type { AppConfig, CharacterState, SelectionContext, StudyDocument } from '../../shared/types';
 import { ingestPdf, ingestText } from './lib/documents';
 import { saveSession, loadSession, deleteSession } from './lib/storage';
 import { TurnGate } from './lib/turnGate';

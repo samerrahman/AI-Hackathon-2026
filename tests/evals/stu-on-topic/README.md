@@ -14,7 +14,7 @@ before and after.
   - `experiments`: the sample PDF *Experiments and causal claims*, captured from the browser upload flow.
   - `sequences`: the sample PDF *Sequences and convergence*, captured the same way.
   - `photosynthesis`: pasted notes (`fixtures/photosynthesis.txt`) turned into a document exactly as
-    `ingestText` in `src/lib/documents.ts` does it.
+    `ingestText` in `web/src/lib/documents.ts` does it.
   - `supply-and-demand`: no notes ("or just start talking"), so the Judge grades from its own knowledge.
 - **3 teacher personas**, played by `step-3.7-flash` (`teacher.mts`). Each sees the notes (or, without
   notes, only the title) and the visible chat, never the rubric. Every persona opens with a short
@@ -28,14 +28,14 @@ before and after.
 Each turn goes through the app's own code path. The simulated teacher writes a message, then
 `runTeachTurn` produces Stu's reply, then `runJudgeTurn` grades it. If grading finishes the topic, a second
 `runJudgeTurn` produces Stu's teach-back. State tokens, revisions and message ids are threaded the way
-`teach()` and `runJudge()` in `src/App.tsx` do it. The eval doesn't change any app code. It wraps the
+`teach()` and `runJudge()` in `web/src/App.tsx` do it. The eval doesn't change any app code. It wraps the
 provider only to record what each model call received and returned.
 
 ## Run it
 
 ```sh
-npx tsx evals/stu-on-topic/run.mts --label baseline          # about 15 minutes for all 12 scenarios
-npx tsx evals/stu-on-topic/grade.mts --label baseline        # a few minutes: labels every Stu reply
+npx tsx tests/evals/stu-on-topic/run.mts --label baseline          # about 15 minutes for all 12 scenarios
+npx tsx tests/evals/stu-on-topic/grade.mts --label baseline        # a few minutes: labels every Stu reply
 ```
 
 | `run.mts` flag | Meaning |

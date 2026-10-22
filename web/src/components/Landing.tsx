@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeftRight, ArrowRight, Ban, Check, EyeOff, FileUp, Github, Hand, HardDrive, Menu, MessageCircle, Quote, SearchCheck, Settings2, Tag, X } from 'lucide-react';
-import type { AppConfig } from '../../shared/types';
+import type { AppConfig } from '../../../shared/types';
 import { Miso } from './Miso';
 
 /** The product landing page shown on the welcome screen. App owns all state; this file is the page around the start card. */

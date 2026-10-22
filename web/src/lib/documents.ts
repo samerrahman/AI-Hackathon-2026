@@ -1,7 +1,7 @@
 import { GlobalWorkerOptions, getDocument, version as pdfjsVersion } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
-import type { SourceSpan, StudyDocument } from '../../shared/types';
+import type { SourceSpan, StudyDocument } from '../../../shared/types';
 import { nativeLines, spansFromLines } from './pdf-spans';
 import { readDocumentCache, writeDocumentCache } from './storage';
 

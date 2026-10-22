@@ -49,7 +49,7 @@ The technique only works if the conversation stays on what you're studying. Earl
 - **He steers back from tangents.** If your message wanders into a story or facts your notes don't cover, he says he's lost on how it fits and asks about the lesson again. He uses your examples to understand the idea they show, not to chase their details.
 - **The server checks his questions.** Each reply races two samples. A sample that brings up a subject that appears nowhere in your notes, the lesson, or your own words loses to one that stays on topic.
 
-Measured on a live evaluation in [`evals/stu-on-topic`](evals/stu-on-topic): 12 simulated lessons across 4 topics and 3 kinds of teacher (diligent, easily led, prone to wandering off), with every Stu reply graded blind:
+Measured on a live evaluation in [`tests/evals/stu-on-topic`](tests/evals/stu-on-topic): 12 simulated lessons across 4 topics and 3 kinds of teacher (diligent, easily led, prone to wandering off), with every Stu reply graded blind:
 
 | Every Stu reply, graded blind | Before | After |
 | --- | --- | --- |
@@ -111,7 +111,7 @@ Without a key, **Try a sample session** still works end to end.
 | `npm test` | Server and library tests (mocked providers, no API credits) |
 | `npm run test:e2e` | Playwright browser tests (starts its own API on :3101 and web on :5174) |
 | `npm run build` | Production build |
-| `npx tsx evals/stu-on-topic/run.mts --label <name>` | Live on-topic evaluation (uses real StepFun credits; see its README) |
+| `npx tsx tests/evals/stu-on-topic/run.mts --label <name>` | Live on-topic evaluation (uses real StepFun credits; see its README) |
 
 ## Deploy
 
@@ -131,6 +131,19 @@ DNS for `brodidnot.study` is in [docs/DOMAIN.md](docs/DOMAIN.md).
 ## Limits
 
 Up to 5 files per topic, 20 MB and 100 pages per PDF, and 300,000 extracted characters in total. Recordings are capped at 3 minutes. Scanned PDFs need OCR, which isn't supported yet, so paste their text instead. Long notes are sampled evenly per page when the plan is built. The Judge still reads the full passages it needs.
+
+## Project layout
+
+| Folder | What's in it |
+| --- | --- |
+| [`web/`](web) | The site: React app (`web/src`), static files (`web/public`), `index.html`, Vite config |
+| [`server/`](server) | The Express API: the Judge, Stu, state sealing, voice |
+| [`api/`](api) | The Vercel function that serves `server/` |
+| [`shared/`](shared) | Types used by both the site and the server |
+| [`tests/`](tests) | Playwright tests, their config, and the live on-topic eval in [`tests/evals`](tests/evals/stu-on-topic) |
+| [`docs/`](docs) | Decisions, domain setup, screenshots, the original build handoff |
+
+Unit tests sit next to the code they test (`server/*.test.ts`, `web/src/lib/*.test.ts`).
 
 ## Under the hood
 

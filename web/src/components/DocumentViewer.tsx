@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, FileText, Minus, Plus, ScanLine, X } from 'lucide-react';
 import { getDocument, TextLayer } from 'pdfjs-dist';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
-import type { SelectionContext, StudyDocument } from '../../shared/types';
+import type { SelectionContext, StudyDocument } from '../../../shared/types';
 import '../lib/documents';
 import './document-viewer.css';
 

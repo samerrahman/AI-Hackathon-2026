@@ -1,5 +1,5 @@
 import type { TextItem, TextStyle } from 'pdfjs-dist/types/src/display/api';
-import type { SourceRect, SourceSpan } from '../../shared/types';
+import type { SourceRect, SourceSpan } from '../../../shared/types';
 
 const bounded = (value: number) => Math.max(0, Math.min(1, value));
 type ExtractedLine = { text: string; rects: SourceRect[]; y: number; height: number; left: number; fontSize: number };

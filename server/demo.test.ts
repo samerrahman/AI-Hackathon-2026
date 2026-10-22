@@ -5,14 +5,14 @@ import { createHash } from 'node:crypto';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { StudyDocument, TurnRequest } from '../shared/types.js';
-import { nativeLines, spansFromLines } from '../src/lib/pdf-spans.js';
+import { nativeLines, spansFromLines } from '../web/src/lib/pdf-spans.js';
 import { DemoProvider } from './demo.js';
 import { createConcepts, runTurn } from './engine.js';
 import { decodeState, encodeState } from './state.js';
 
 process.env.SESSION_SECRET = 'test-only-demo-secret';
 async function ingest(name: string): Promise<StudyDocument> {
-  const bytes = await readFile(`public/examples/${name}.pdf`);
+  const bytes = await readFile(`web/public/examples/${name}.pdf`);
   const hash = createHash('sha256').update(bytes).digest('hex');
   const id = `doc-${hash.slice(0, 24)}`;
   const loading = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });

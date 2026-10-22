@@ -90,6 +90,7 @@ async function openSample(page: Page) {
 
 async function recordForTranscription(page: Page) {
   await page.getByRole('button', { name: 'Start explaining' }).click();
+  await expect(page.getByRole('button', { name: 'I’m done' })).toBeFocused();
   await page.getByRole('button', { name: 'I’m done' }).click();
   await expect(page.locator('.character-state')).toContainText('Transcribing');
 }
@@ -121,14 +122,14 @@ test('submitting a typed draft cancels active recording and rejects a pending tr
   await editor.fill(explanation);
   await page.getByRole('button', { name: 'Start explaining' }).click();
   await expect(page.getByRole('button', { name: 'I’m done' })).toBeVisible();
-  await page.getByRole('button', { name: 'Send explanation' }).click();
+  await page.getByRole('button', { name: 'Add to board' }).click();
   await expect(editor).toHaveValue('');
   expect(await page.evaluate(() => window.__stuVoiceTest.stoppedTracks)).toBe(1);
   expect(await page.evaluate(() => window.__stuVoiceTest.transcriptionRequests)).toBe(0);
 
   await editor.fill(explanation);
   await recordForTranscription(page);
-  await page.getByRole('button', { name: 'Send explanation' }).click();
+  await page.getByRole('button', { name: 'Add to board' }).click();
   await expect(editor).toHaveValue('');
   expect(await page.evaluate(() => window.__stuVoiceTest.transcriptionSignal?.aborted)).toBe(true);
   await page.evaluate(() => window.__stuVoiceTest.releaseTranscript());
@@ -144,7 +145,10 @@ test('canceling a pending microphone permission request closes a late-granted st
   await page.evaluate(() => { window.__stuVoiceTest.deferPermission = true; });
   await page.getByRole('button', { name: 'Start explaining' }).click();
   await expect(page.locator('.character-state')).toContainText('Earnest. A little confused.');
+  // The control swaps in place; focus follows it instead of dropping to <body>.
+  await expect(page.getByRole('button', { name: /Cancel.*(permission|microphone)/i })).toBeFocused();
   await page.getByRole('button', { name: /Cancel.*(permission|microphone)/i }).click();
+  await expect(page.getByRole('button', { name: 'Start explaining' })).toBeFocused();
   await page.evaluate(() => window.__stuVoiceTest.releasePermission());
   await expect.poll(() => page.evaluate(() => window.__stuVoiceTest.stoppedTracks)).toBe(1);
   await expect(page.getByRole('button', { name: 'I’m done' })).toHaveCount(0);

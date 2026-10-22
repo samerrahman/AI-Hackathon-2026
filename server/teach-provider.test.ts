@@ -93,6 +93,30 @@ test('notes reach Step 5 as short ids with text only, and cited short ids map ba
   assert.deepEqual(compactSources({ transcript: [] }).wire, { transcript: [] });
 });
 
+test('Stu\'s prompt carries the lesson title, idea names and current idea, and steers back from tangents', async () => {
+  const oldKey = process.env.STEPFUN_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.STEPFUN_API_KEY = 'private-test-key';
+  const bodies: Record<string, any>[] = [];
+  globalThis.fetch = (async (_input, init) => { bodies.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: 'Wait, so what is the light part for?' } }] }), { status: 200 }); }) as typeof fetch;
+  try {
+    const provider = new StepFunTeachProvider();
+    const transcript = [{ id: 'teacher-1', role: 'user' as const, text: 'My cat sleeps on the charger.' }];
+    const lesson = { title: 'Photosynthesis', ideas: ['Light reactions', 'Calvin cycle'], current: 'Calvin cycle' };
+    await provider.stu({ depth: 'big-picture', mode: 'teach', transcript, lesson, director: { focus: { type: 'off_topic', teacherMessageId: 'teacher-1', anchorQuote: 'My cat sleeps on the charger.', instruction: 'steer_back' }, mistake: null } });
+    await provider.stu({ depth: 'big-picture', mode: 'teach', transcript, lesson, director: { focus: { type: 'wrong', teacherMessageId: 'teacher-1', anchorQuote: 'My cat sleeps on the charger.', instruction: 'ask_check' }, mistake: null } });
+    const [steer, check] = bodies.map(body => body.messages[0].content as string);
+    for (const system of [steer, check]) assert.ok(system.includes('“Photosynthesis”') && system.includes('“Light reactions”; “Calvin cycle”') && system.includes('Stay inside the lesson'));
+    assert.match(steer, /wandered away from the lesson[^]*explain “Calvin cycle”/);
+    assert.match(check, /doesn't sit right[^]*Without saying what the right answer is/);
+    assert.ok(!steer.includes('If it fits, ask about'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.STEPFUN_API_KEY; else process.env.STEPFUN_API_KEY = oldKey;
+  }
+});
+
 test('per-role StepFun timeouts fit inside the 180-second Vercel request budget', () => {
   const rubric = callTimeoutMs('rubric'); const judge = callTimeoutMs('judge'); const brief = callTimeoutMs('brief'); const stu = callTimeoutMs('stu');
   // /api/topic and /api/judge each make one Step 5 call.

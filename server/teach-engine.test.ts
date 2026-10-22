@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SourceSpan, StudyDocument } from '../shared/types.js';
 import { ApiError } from './schema.js';
-import { createTeachTopic, openTeachState, planSources, runJudgeTurn, runTeachTurn } from './teach-engine.js';
+import { createTeachTopic, openTeachState, planSources, runJudgeTurn, runTeachTurn, tangentWords } from './teach-engine.js';
 import { DemoTeachProvider } from './teach-demo.js';
 import type { BriefInput, JudgeInput, ModelResult, StuInput, TeachProvider } from './teach-provider.js';
 import { createTopicSchema, rubricSchema, type Depth, type JudgeResult, type RelearnBrief, type RubricDraft, type StuResult } from './teach-schema.js';
@@ -94,7 +94,9 @@ test('Stu replies first without the Judge; Stu never receives notes, rubric, sou
   assert.equal(reply.judgePending, true);
   assert.equal(reply.progress.credited, 0);
   assert.equal(reply.message?.sourceIds, undefined);
-  assert.deepEqual(Object.keys(p.stuInputs[0]).sort(), ['depth', 'director', 'lastQuestionStyle', 'mode', 'transcript']);
+  assert.deepEqual(Object.keys(p.stuInputs[0]).sort(), ['depth', 'director', 'lastQuestionStyle', 'lesson', 'mode', 'transcript']);
+  // The lesson is only the title and idea names, so Stu can stay on topic without seeing the rubric or notes.
+  assert.deepEqual(p.stuInputs[0].lesson, { title: 'Simple circuits', ideas: draft.coreIdeas, current: 'circuit' });
   const payload = JSON.stringify(p.stuInputs[0]);
   assert.ok(!payload.includes(source.text));
   assert.ok(!payload.includes('switch mechanism'));
@@ -178,10 +180,59 @@ test('contradiction revokes credit, becomes Stu’s next question in the teacher
   mode = 'credit';
   const correctedReply = await runTeachTurn(turn(down, 'I correct that: an open switch breaks the path, so current stops flowing through the lamp.', 3, 'user-3'), p.instance);
   const director = p.stuInputs.at(-1)!.director as { focus: { anchorQuote: string; instruction: string } };
-  assert.equal(director.focus.instruction, 'ask_why');
+  // Stu doubts the wrong claim in the teacher's own words, without being told the right answer.
+  assert.equal(director.focus.instruction, 'ask_check');
   assert.equal(director.focus.anchorQuote, wrong);
   const corrected = await runJudgeTurn(grade(correctedReply), p.instance);
   assert.equal(corrected.progress.credited, 1);
+});
+
+test('Stu learns the idea the teacher is explaining, then the first idea not yet taught, and steers back from tangents', async () => {
+  let itemIds: string[] = [];
+  let problems: JudgeResult['problems'] = [];
+  const p = provider({ judge: input => judgeFor(input, itemIds, [], problems) });
+  const created = await topic(p.instance);
+  const rubric = openTeachState(created.stateToken, created.topicId, [document]).rubric;
+  // Nothing taught yet and the message names no idea: the first idea.
+  const first = await runTeachTurn(turn(created, 'Hello Stu, let us begin.'), p.instance);
+  assert.equal(p.stuInputs.at(-1)!.lesson?.current, 'circuit');
+  // Teaching the first idea's gist moves Stu on to the next idea whose gist is missing.
+  itemIds = rubric.filter(item => item.ideaIndex === 0 && item.stage === 'cover').map(item => item.id);
+  const graded = await runJudgeTurn(grade(first), p.instance);
+  itemIds = [];
+  const second = await runTeachTurn(turn(graded, 'That is the first part.', 2, 'user-2'), p.instance);
+  assert.equal(p.stuInputs.at(-1)!.lesson?.current, 'current');
+  // A message clearly about an unfinished idea keeps Stu on that idea.
+  await runTeachTurn(turn(graded, 'A circuit is a closed path from the battery through the lamp and back again.', 2, 'user-2b'), p.instance);
+  assert.equal(p.stuInputs.at(-1)!.lesson?.current, 'circuit');
+  // A message the Judge marks off topic makes Stu steer back to the lesson instead of asking about the tangent.
+  const tangent = 'My cat likes to sleep on the warm laptop charger at night.';
+  const drifted = await runTeachTurn(turn(await runJudgeTurn(grade(second), p.instance), tangent, 3, 'user-3'), p.instance);
+  problems = [{ type: 'off_topic', description: 'Not about circuits', sourceIds: [], affectedRubricItemIds: [], teacherMessageId: 'user-3', quote: tangent }];
+  const regraded = await runJudgeTurn(grade(drifted), p.instance);
+  problems = [];
+  const back = await runTeachTurn(turn(regraded, 'Sorry, where were we?', 4, 'user-4'), p.instance);
+  assert.ok(back.message);
+  const director = p.stuInputs.at(-1)!.director as { focus: { instruction: string; anchorQuote: string } };
+  assert.equal(director.focus.instruction, 'steer_back');
+  assert.equal(director.focus.anchorQuote, tangent);
+});
+
+test('a Stu sample that brings in a subject the lesson never mentions loses to one that stays on topic, but never causes an error', async () => {
+  const lesson = 'Photosynthesis. Plants capture light energy and turn carbon dioxide and water into glucose. Photosynthesis turns light into energy for plants.';
+  assert.deepEqual(tangentWords('So everything runs on that energy? What do they use for energy at nighttime when there is no sunlight?', lesson), ['nighttime', 'sunlight']);
+  assert.deepEqual(tangentWords('Wait, so the plant grabs the light? What happens to the carbon dioxide after that?', lesson), []);
+  const tangent = 'Oh! What do batteries do at nighttime when the moonlight is out?';
+  const onTopic = 'Oh! So how does an open switch stop the current?';
+  let calls = 0;
+  const racing = provider({ stu: async input => { const first = calls++ % 2 === 0;
+    // The tangent arrives first; the on-topic sample is slower but wins.
+    await new Promise(resolve => setTimeout(resolve, first ? 1 : 25)); return { text: first ? tangent : onTopic, questionStyle: alternate(input) }; } });
+  const reply = await runTeachTurn(turn(await topic(racing.instance)), racing.instance);
+  assert.equal(reply.message?.text, onTopic);
+  // Both samples drift: Stu still answers rather than failing the turn.
+  const drifting = provider({ stu: async input => ({ text: tangent, questionStyle: alternate(input) }) });
+  assert.equal((await runTeachTurn(turn(await topic(drifting.instance)), drifting.instance)).message?.text, tangent);
 });
 
 test('an ungrounded problem quote never reaches Stu; he falls back to the newest teacher message', async () => {
@@ -249,9 +300,22 @@ test('Stu races two samples and keeps the one that follows his rules', async () 
   const result = await runTeachTurn(turn(created), p.instance);
   assert.deepEqual(p.calls, ['stu', 'stu']);
   assert.equal(result.message?.text, 'Wait, how does that work in your example?');
-  const stillBroken = provider({ stu: () => ({ text: 'One? Two? Three?', questionStyle: 'literal' }) });
-  const again = await topic(stillBroken.instance);
-  await assert.rejects(runTeachTurn(turn(again), stillBroken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
+  // Only off the ideal shape (three questions, too long): still used when nothing better arrives, never an error.
+  const offShape = provider({ stu: input => ({ text: 'One? Two? Three?', questionStyle: alternate(input) }) });
+  assert.equal((await runTeachTurn(turn(await topic(offShape.instance)), offShape.instance)).message?.text, 'One? Two? Three?');
+  const long = `Oh wow, ${'so the path closes and the lamp lights up and '.repeat(10)}right?`;
+  assert.ok(long.length > 450 && long.length < 700);
+  const longOnly = provider({ stu: input => ({ text: long, questionStyle: alternate(input) }) });
+  assert.equal((await runTeachTurn(turn(await topic(longOnly.instance)), longOnly.instance)).message?.text, long);
+  // No question at all is broken: a second pair runs, and only if that fails too does the turn error.
+  let rounds = 0;
+  const recovering = provider({ stu: input => (++rounds <= 2 ? { text: 'I see.', questionStyle: alternate(input) } : { text: 'Wait, why does it stop?', questionStyle: alternate(input) }) });
+  const recovered = await runTeachTurn(turn(await topic(recovering.instance)), recovering.instance);
+  assert.equal(recovered.message?.text, 'Wait, why does it stop?');
+  assert.deepEqual(recovering.calls.filter(call => call === 'stu').length, 4);
+  const broken = provider({ stu: input => ({ text: 'I see.', questionStyle: alternate(input) }) });
+  await assert.rejects(runTeachTurn(turn(await topic(broken.instance)), broken.instance), (error: unknown) => error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT');
+  assert.equal(broken.calls.filter(call => call === 'stu').length, 4);
 });
 
 test('two rubric samples race; stray citations are dropped and the first plan that passes is kept', async () => {

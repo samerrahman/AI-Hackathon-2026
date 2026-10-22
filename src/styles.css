@@ -81,22 +81,6 @@ body{background:linear-gradient(180deg,#fcf8f2 0%,#f9f2e9 100%)}
 .learning-progress{margin:10px 0 3px;padding:10px 11px;border-radius:9px;background:#f7ece3;border:1px solid #ead3c2}.learning-progress>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}.learning-progress span{font-size:8px;letter-spacing:1px;color:#9b5c4d}.learning-progress strong{font-size:9px;font-weight:600;color:#74655e}.learning-progress-track{height:6px;border-radius:99px;background:#eadfd5;overflow:hidden}.learning-progress-track>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#e99a63,#c65f4e);transition:width 500ms cubic-bezier(.2,.8,.3,1)}
 .mode-badge.mock{background:#eef1e7;color:#5c744f}.sample-divider{font-size:9px;color:#a38f7e}.mock-controls{display:flex;gap:6px;margin:7px 0 12px}.mock-controls button{flex:1;padding:7px 6px;border:1px solid #e4c8b5;border-radius:7px;background:#fff9f4;color:#8f4d3c;font-size:9px;font-weight:600}.mock-controls button:hover{background:#f7e3d6;transform:translateY(-1px)}
 
-/* Focused teach-back session: uploaded sources stay private and the conversation leads. */
-.focused-workspace{grid-template-columns:238px minmax(0,1fr);background:#f7f1e9}.focused-workspace .concept-sidebar{border-right:1px solid #e8d9cc}.teaching-chat{width:min(880px,100%);height:100%;min-height:0;margin:0 auto;padding:18px 34px 20px;display:flex;flex-direction:column;background:#fffdfa;border-left:1px solid #eee2d8;border-right:1px solid #eee2d8}.chat-header{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid #eee4dc;padding-bottom:12px}.chat-stu{display:flex;align-items:center;gap:13px}.chat-stu .miso-character{width:64px!important;height:64px!important}.chat-stu>div{display:flex;flex-direction:column;gap:3px}.chat-stu .eyebrow{display:flex;align-items:center;gap:6px;color:#a15342;font-size:8px}.chat-stu strong{font-family:'Libre Caslon Display',Georgia,serif;font-size:20px;font-weight:400}.chat-stu small{font-size:10px;color:#827b72}.chat-progress{padding:11px 2px 9px}.chat-progress>div:first-child{display:flex;justify-content:space-between;gap:15px;margin-bottom:7px}.chat-progress span{font-size:8px;letter-spacing:1px;color:#a15342}.chat-progress strong{font-size:9px;color:#786d65}.chat-thread{flex:1;min-height:160px;overflow-y:auto;padding:20px 8px 18px;display:flex;flex-direction:column;gap:17px;scrollbar-width:thin}.message-row{display:flex;align-items:flex-end;gap:9px;max-width:78%}.student-message{align-self:flex-end;justify-content:flex-end}.stu-message{align-self:flex-start}.message-row>.miso-character{width:38px!important;height:38px!important;flex:0 0 38px}.message-wrap{display:flex;flex-direction:column;gap:5px}.student-message .message-wrap{align-items:flex-end}.message-wrap>span{font-size:9px;color:#8d847b;padding:0 4px}.message-bubble{padding:11px 15px;border-radius:17px 17px 17px 5px;background:#f4e7dc;color:#443b36;font-size:13px;line-height:1.55;box-shadow:0 2px 8px #6a49320a}.message-bubble p{margin:0;line-height:inherit}.student-message .message-bubble{border-radius:17px 17px 5px 17px;background:#d66d58;color:#fff}.pending-message .message-bubble{display:flex;gap:4px;padding:15px 18px}.pending-message i{width:5px;height:5px;border-radius:50%;background:#af7465;animation:chat-dot 1s infinite alternate}.pending-message i:nth-child(2){animation-delay:.15s}.pending-message i:nth-child(3){animation-delay:.3s}@keyframes chat-dot{to{opacity:.3;transform:translateY(-2px)}}.chat-composer{margin-top:0;padding-top:12px;border-top:1px solid #eee4dc}.chat-composer .mic-button{width:auto;padding:10px 15px;margin-bottom:7px}.chat-composer .type-label{display:none}.chat-composer .answer-form textarea{height:54px;min-height:54px}.chat-composer .help-actions{display:flex;gap:22px;margin-top:8px;padding-top:4px;border:0}.chat-composer .help-actions button{font-size:10px}.chat-composer .companion-footer{margin-top:2px;padding:8px 0 0}.teaching-chat>.mock-controls{max-width:420px;margin:4px auto 0;width:100%}
-@media(max-width:1190px) and (min-width:761px){.focused-workspace,.focused-workspace.sidebar-open{grid-template-columns:minmax(0,1fr)}.focused-workspace .concept-sidebar{display:none}.focused-workspace.sidebar-open{grid-template-columns:208px minmax(0,1fr)}.focused-workspace.sidebar-open .concept-sidebar{display:flex}.teaching-chat{width:100%;border-right:0}.workspace-app .mobile-tabs{display:flex;min-height:43px;border-bottom:1px solid #dfd9cc;background:#f9f7f0;justify-content:center;gap:36px}.workspace-app .mobile-tabs button{display:flex;align-items:center;gap:7px;padding:10px 15px;font-size:11px}}
-@media(max-width:760px){.mobile-tabs{justify-content:space-between}.focused-workspace,.focused-workspace.sidebar-open{display:flex}.focused-workspace .concept-sidebar{display:none}.focused-workspace.sidebar-open .concept-sidebar{display:flex}.teaching-chat{display:flex!important;width:100%;padding:10px 14px 12px;border:0}.chat-header{padding-bottom:8px}.chat-stu .miso-character{width:52px!important;height:52px!important}.chat-stu strong{font-size:17px}.chat-stu small{font-size:9px;max-width:210px}.chat-progress{padding-top:8px}.chat-progress strong{font-size:8px}.chat-thread{padding:13px 2px;gap:13px}.message-row{max-width:90%}.message-row>.miso-character{width:32px!important;height:32px!important;flex-basis:32px}.message-bubble{font-size:12px;padding:10px 13px}.chat-composer{padding-top:9px}.chat-composer .mic-button{font-size:11px;padding:8px 11px}.chat-composer .answer-form textarea{height:47px;min-height:47px}.chat-composer .help-actions{gap:12px;justify-content:space-between}.chat-composer .help-actions button{font-size:9px}.chat-composer .companion-footer{padding-top:5px}}
-.focused-workspace{background:#fffdfa}.teaching-chat{width:100%;margin:0;padding-left:clamp(28px,5vw,76px);padding-right:clamp(28px,5vw,76px);border-left:0;border-right:0}@media(max-width:760px){.teaching-chat{padding-left:14px;padding-right:14px}}
-.session-chrome{background:#fffdfa;border-bottom:1px solid #eadfd6;padding:0 clamp(20px,3vw,48px) 11px}.session-tabs{height:43px;display:flex;align-items:center;gap:25px}.session-tabs button{height:100%;display:flex;align-items:center;gap:7px;padding:0 2px;border-bottom:2px solid transparent;font-size:11px;color:#81776f}.session-tabs button.active{border-bottom-color:#c65f4e;color:#924839;font-weight:650}.top-progress>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:6px}.top-progress span{font-size:8px;letter-spacing:1.1px;color:#a15342}.top-progress strong{font-size:9px;color:#756b64}.focused-workspace{grid-template-columns:minmax(0,1fr);}.focused-workspace.sidebar-open{grid-template-columns:minmax(0,1fr) 310px}.focused-workspace .teaching-chat{grid-column:1;grid-row:1}.focused-workspace .topic-sidebar{display:none;grid-column:2;grid-row:1;border-left:1px solid #e8d9cc;border-right:0;background:#f5efe7;padding:23px 20px}.focused-workspace.sidebar-open .topic-sidebar{display:flex}.topic-sidebar .sidebar-title button{display:flex;margin-left:auto}.topic-sidebar .sidebar-doc{padding-bottom:20px}.topic-sidebar .sidebar-section{padding-top:20px}.topic-sidebar .sidebar-note{padding-top:30px}
-@media(max-width:1190px) and (min-width:761px){.focused-workspace,.focused-workspace.sidebar-open{grid-template-columns:minmax(0,1fr) 280px}.focused-workspace:not(.sidebar-open){grid-template-columns:minmax(0,1fr)}.focused-workspace.sidebar-open .topic-sidebar{display:flex}.session-chrome{padding-left:28px;padding-right:28px}}
-@media(max-width:760px){.session-chrome{padding:0 14px 9px}.session-tabs{height:39px;justify-content:space-between}.top-progress strong{font-size:8px}.focused-workspace,.focused-workspace.sidebar-open{display:flex;position:relative}.focused-workspace .topic-sidebar{display:none}.focused-workspace.sidebar-open .topic-sidebar{display:flex;position:absolute;z-index:30;inset:0 0 0 42px;box-shadow:-12px 0 35px #4b35241e}.focused-workspace.sidebar-open .teaching-chat{display:flex!important}.topic-sidebar .sidebar-note{display:none}}
-.focused-workspace.sidebar-open{grid-template-columns:310px minmax(0,1fr)}.focused-workspace .teaching-chat{grid-column:2}.focused-workspace:not(.sidebar-open) .teaching-chat{grid-column:1}.focused-workspace .topic-sidebar{grid-column:1;border-left:0;border-right:1px solid #e8d9cc}@media(max-width:1190px) and (min-width:761px){.focused-workspace.sidebar-open{grid-template-columns:280px minmax(0,1fr)}}@media(max-width:760px){.focused-workspace .teaching-chat,.focused-workspace:not(.sidebar-open) .teaching-chat{grid-column:auto}.focused-workspace.sidebar-open .topic-sidebar{inset:0 42px 0 0;box-shadow:12px 0 35px #4b35241e}}
-.teaching-chat{padding-left:clamp(20px,3vw,48px);padding-right:clamp(20px,3vw,48px)}.chat-thread{padding-left:0;padding-right:0}.message-row{max-width:90%}.chat-composer{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:end;gap:8px 12px;padding-top:9px}.chat-composer .mic-button{grid-column:1;margin:0;height:48px;padding:9px 15px}.chat-composer .answer-form{grid-column:2;padding:7px 10px 5px}.chat-composer .answer-form textarea{height:34px;min-height:34px;max-height:90px}.chat-composer>.text-button,.chat-composer>.voice-limit,.chat-composer>.recording-controls{grid-column:1/-1}.chat-composer .help-actions,.chat-composer .companion-footer{grid-column:1/-1}.chat-composer .help-actions{margin-top:2px;padding-top:1px}.chat-composer .companion-footer{padding-top:4px}@media(max-width:760px){.teaching-chat{padding-left:12px;padding-right:12px}.message-row{max-width:94%}.chat-composer{grid-template-columns:1fr;gap:6px}.chat-composer .mic-button,.chat-composer .answer-form{grid-column:1;width:100%}.chat-composer .mic-button{height:38px}.chat-composer .answer-form textarea{height:36px;min-height:36px}}
-.top-progress{margin-top:13px}.top-progress>div:first-child{margin-bottom:10px}@media(max-width:760px){.top-progress{margin-top:10px}.top-progress>div:first-child{margin-bottom:8px}}
-.teaching-chat{padding-top:9px}.chat-header{padding-bottom:6px}.chat-stu .miso-character{width:52px!important;height:52px!important}.chat-stu strong{font-size:18px}.chat-stu small{font-size:9px}@media(max-width:760px){.teaching-chat{padding-top:6px}.chat-header{padding-bottom:5px}.chat-stu .miso-character{width:44px!important;height:44px!important}}
-.chat-composer{align-items:stretch}.chat-composer .mic-button{height:100%;min-height:48px}@media(max-width:760px){.chat-composer .mic-button{height:38px;min-height:38px}}
-.chat-composer .mic-button{height:52px;min-height:52px;align-self:start}.chat-composer .answer-form{height:52px;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px}.chat-composer .answer-form textarea{height:32px;min-height:32px;max-height:32px;resize:none;flex:1}.chat-composer .answer-form>div{flex:0 0 auto}.chat-composer .answer-form>div>span{display:none}@media(max-width:760px){.chat-composer .mic-button,.chat-composer .answer-form{height:42px;min-height:42px}.chat-composer .answer-form textarea{height:28px;min-height:28px;max-height:28px}}
-.chat-composer{grid-template-columns:minmax(0,1fr) auto}.chat-composer .answer-form{grid-column:1;grid-row:1}.chat-composer .mic-button{grid-column:2;grid-row:1}@media(max-width:760px){.chat-composer{grid-template-columns:1fr}.chat-composer .answer-form{grid-column:1;grid-row:1}.chat-composer .mic-button{grid-column:1;grid-row:2}}
-.session-chrome{padding-bottom:7px}.session-tabs{height:34px}.top-progress{margin-top:6px}.top-progress>div:first-child{margin-bottom:6px}.learning-progress-track{height:4px}@media(max-width:760px){.session-tabs{height:34px}.top-progress{margin-top:5px}.top-progress>div:first-child{margin-bottom:5px}}
 
 /* Teach Stu features (topic, depth, hidden-rubric progress, notes tab, judge evidence) in this design */
 .miso-character[role=img]:not([data-clickable]){cursor:default}
@@ -106,21 +90,11 @@ body{background:linear-gradient(180deg,#fcf8f2 0%,#f9f2e9 100%)}
 .topic-fields input:focus,.topic-fields select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px #c65f4e1f}
 .topic-fields small{grid-column:1/-1;color:var(--muted);font-size:10px}
 .live-badge{font-size:10px;line-height:1.3;color:#4f6645;background:#eef3e9;border:1px solid #d6e2cc;border-radius:5px;padding:5px 8px;white-space:nowrap}
-.top-progress progress{-webkit-appearance:none;appearance:none;display:block;width:100%;height:4px;border:0;border-radius:99px;background:#eadfd5;overflow:hidden}
-.top-progress progress::-webkit-progress-bar{background:#eadfd5;border-radius:99px}
-.top-progress progress::-webkit-progress-value{background:linear-gradient(90deg,#e99a63,#c65f4e);border-radius:99px;transition:width 500ms cubic-bezier(.2,.8,.3,1)}
-.top-progress progress::-moz-progress-bar{background:linear-gradient(90deg,#e99a63,#c65f4e);border-radius:99px}
-.session-tabs .session-tab-end{margin-left:auto}
-.transition-note{margin:0;padding:9px clamp(20px,3vw,48px);background:#eef3e9;color:#4f6645;border-bottom:1px solid #d6e2cc;font-size:12px;font-weight:600}
-.focused-workspace>.notes-pane{grid-column:2;grid-row:1}
-.focused-workspace:not(.sidebar-open)>.notes-pane{grid-column:1}
 .notes-foot .text-button{display:flex;align-items:center;gap:5px;font-size:10px}
-.topic-sidebar .topic-panel{padding:17px 2px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:4px 0 0}
 .topic-panel p{display:flex;justify-content:space-between;gap:8px;font-size:11px;margin:0 0 12px}
 .topic-panel p strong{font-weight:600}
 .topic-panel p span{color:var(--muted);text-align:right}
 .topic-panel .text-button{display:flex;align-items:center;gap:5px;font-size:11px}
-.message-wrap .citations{margin:2px 0 0}
 .judge-evidence{max-width:100%;margin:2px 0 0;padding:8px 10px;border:1px dashed #e4c8b5;border-radius:10px;background:#fff9f4;font-size:10px;color:var(--muted);text-align:left}
 .judge-evidence summary{cursor:pointer;font-weight:650;color:#924839}
 .judge-evidence p{font-size:10px;margin:7px 0;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -130,7 +104,7 @@ body{background:linear-gradient(180deg,#fcf8f2 0%,#f9f2e9 100%)}
 .expression-controls{flex-wrap:wrap}
 .expression-controls button{flex:1 1 calc(25% - 6px)}
 .expression-controls button[aria-pressed=true]{background:#d66d58;border-color:#d66d58;color:#fff}
-@media(max-width:760px){.topic-fields{grid-template-columns:1fr;padding:12px 14px 0}.focused-workspace>.notes-pane{display:flex;flex:1;width:100%;min-width:0}.session-tabs{gap:16px}}
+@media(max-width:760px){.topic-fields{grid-template-columns:1fr;padding:12px 14px 0}}
 .start-talking{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-size:11px;color:var(--muted)}
 .start-talking:hover{color:var(--orange)}
 @media(min-width:761px){.welcome-hero h1{font-size:clamp(48px,5.4vw,76px)}.welcome-hero h1 em{white-space:nowrap}}
@@ -140,3 +114,250 @@ body{background:linear-gradient(180deg,#fcf8f2 0%,#f9f2e9 100%)}
 .topic-fields .field-error{color:#a63f39;font-weight:600}
 .judge-retry{margin:6px 0 0;font-size:10px;color:#a63f39}
 .judge-retry .text-button{font-size:10px;display:inline;margin-left:4px}
+
+/* ===== Classroom: teach Stu at the lesson board ===== */
+.workspace-app .topbar{height:56px;min-height:56px}
+.workspace-app .brand{font-size:28px;white-space:nowrap;flex-shrink:0}
+.workspace-app .header-divider,.workspace-app .collection-title{display:none}
+.workspace-app .header-actions .outline{white-space:nowrap}
+.classroom{flex:1;min-height:0;position:relative;display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr);grid-template-areas:"board desk" "board plan";column-gap:22px;row-gap:14px;padding:10px 26px 18px;background:#f3e8dd}
+.board-column{grid-area:board;min-width:0;min-height:0;display:flex;flex-direction:column}
+.board-tabs{display:flex;align-items:flex-end;gap:4px;height:36px;padding-left:18px}
+.board-tabs button{display:flex;align-items:center;gap:7px;height:32px;padding:0 14px;border-radius:9px 9px 0 0;background:#f0e2d5;color:#7a5f52;font-size:12px;font-weight:600}
+.board-tabs button[aria-pressed=true]{height:36px;background:#e3cdb9;color:#4f3329}
+.board-tabs .board-topic{margin-left:auto;background:none;font-weight:500}
+.lesson-board{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#fffdf8;border:9px solid #e3cdb9;border-bottom:0;border-radius:14px 14px 0 0;box-shadow:inset 0 0 0 1px #d6bca6}
+.lesson-board.no-ledge{border-bottom:9px solid #e3cdb9;border-radius:14px}
+.board-head{display:flex;align-items:baseline;gap:14px;min-width:0;padding:14px 24px 10px 72px;border-bottom:1px solid #f0e3d6}
+.board-head .eyebrow{margin:0;flex-shrink:0;white-space:nowrap;font-size:9px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#a85a48}
+.board-head h2{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:24px;letter-spacing:-.3px;color:#3f302d}
+.depth-chip{margin-left:auto;flex-shrink:0;font-size:11px;color:#6d5a4f;background:#f5ebe1;border:1px solid #e6d2c2;border-radius:99px;padding:4px 10px}
+.transition-ribbon{display:flex;align-items:center;gap:10px;margin:10px 24px 0 72px;padding:8px 14px;background:#e9f0e0;border:1px solid #cbd8bd;border-radius:8px;color:#4f6645;font-size:12.5px;font-weight:600;animation:ribbon-in .4s ease-out both}
+.ribbon-sticker{flex-shrink:0;padding:2px 8px;border-radius:6px;background:#ffca4f;color:#3f302d;font-size:11px;font-weight:700;transform:rotate(-3deg)}
+@keyframes ribbon-in{from{opacity:0;transform:translateY(-6px)}}
+.board-thread{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px 28px 18px 0;scrollbar-width:thin;background-image:linear-gradient(90deg,transparent 55px,#efc0b3 55px,#efc0b3 56px,transparent 56px),radial-gradient(circle,#eadbcd 1.1px,transparent 1.5px);background-size:auto,24px 24px;background-attachment:local}
+.board-empty{margin:4px 0 18px 72px;font-family:Georgia,serif;font-style:italic;font-size:15px;line-height:32px;color:#806a5c}
+/* Your explanations: written on the board, numbered in the margin */
+.board-entry{display:grid;grid-template-columns:56px minmax(0,1fr);column-gap:16px;margin:0 0 10px}
+.entry-margin{font-family:'Libre Caslon Display',Georgia,serif;font-size:22px;line-height:32px;color:#b4513f;text-align:right;padding-right:10px}
+.entry-body{min-width:0}
+.board-entry .message-bubble{max-width:68ch;overflow-x:auto;overflow-wrap:anywhere;font-size:16.5px;line-height:32px;color:#33261f}
+.board-entry .message-bubble p,.stu-note .message-bubble p{margin:0}
+.board-entry.is-pending .entry-margin{opacity:.8}
+.board-entry.is-pending .message-bubble{animation:board-write .55s steps(24,end) both}
+@keyframes board-write{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.board-entry.by-stu .entry-margin{font-family:inherit;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#5f7556;padding-top:2px}
+.board-entry.by-stu .message-bubble{color:#2f3d2a}
+.board-entry .judge-evidence{margin-top:6px}
+/* Stu's questions: sticky notes on the board */
+.stu-note{position:relative;width:fit-content;max-width:min(560px,calc(100% - 88px));margin:12px 0 20px 88px;padding:12px 16px 14px;background:#fff1bf;color:#4b3a1a;border-radius:2px 2px 16px 2px;box-shadow:0 1px 0 #ecd283,0 10px 16px -12px #8a5a2a88;transform:rotate(-.35deg);animation:note-stick .32s cubic-bezier(.2,.9,.3,1.2) both}
+.stu-note:nth-child(even){transform:rotate(.3deg)}
+.stu-note::before{content:'';position:absolute;top:-8px;left:22px;width:54px;height:16px;background:#f3e3cfcc;border:1px solid #e6d0b8aa;transform:rotate(-3deg)}
+@keyframes note-stick{from{opacity:0;transform:translateY(-8px) rotate(-3deg) scale(.98)}}
+.note-tag{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#8a5f14}
+.stu-note .message-bubble{overflow-x:auto;overflow-wrap:anywhere;font-size:15px;line-height:1.55;color:inherit}
+.stu-note .citations{margin:10px 0 0}
+.stu-note .citations button{background:#fffaf0;border-color:#e8d39b}
+.stu-note.your-answer{background:#e9f0e0;color:#2f3d2a;box-shadow:0 1px 0 #c9d6b9,0 10px 16px -12px #3f5a3088}
+.stu-note.your-answer .note-tag{color:#4f6645}
+.stu-note.pending-message .message-bubble{display:flex;align-items:center;gap:10px;font-family:Georgia,serif;font-style:italic;color:#7a5a20}
+.scribble{width:64px;height:16px;flex-shrink:0}
+.scribble path{fill:none;stroke:#b98a3a;stroke-width:2.4;stroke-linecap:round;stroke-dasharray:90;stroke-dashoffset:90;animation:scribble 1.3s ease-in-out infinite}
+@keyframes scribble{60%,100%{stroke-dashoffset:0}}
+.phase-divider{display:flex;align-items:center;gap:12px;margin:20px 28px 20px 72px;font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#5f7556}
+.phase-divider::before,.phase-divider::after{content:'';flex:1;height:2px;background:repeating-linear-gradient(90deg,#c7d3bb 0 8px,transparent 8px 14px)}
+/* The next ruled line is where you write */
+.writing-line{display:grid;grid-template-columns:56px minmax(0,1fr);column-gap:16px;margin:0;padding:8px 28px 0 0;border-top:1px dashed #ead8c8;background:linear-gradient(90deg,transparent 55px,#efc0b3 55px,#efc0b3 56px,transparent 56px),repeating-linear-gradient(180deg,transparent 0 31px,#f2e7dc 31px 32px);background-position:0 8px}
+.writing-line .entry-margin{opacity:.8}
+.writing-line:focus-within .entry-margin{opacity:1}
+.writing-line:focus-within{box-shadow:inset 0 -3px 0 #c65f4e}
+.writing-line textarea{width:100%;height:auto;min-height:64px;max-height:160px;overflow-y:auto;field-sizing:content;padding:0;border:0;border-radius:0;background:none;outline:none;resize:none;font:inherit;font-size:16.5px;line-height:32px;color:#33261f;caret-color:#c65f4e}
+.writing-line textarea::placeholder{color:#846f62;font-style:italic;font-family:Georgia,serif}
+.board-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 20px 12px 72px}
+.talk-button{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:99px;border:1.5px solid #e2c3b2;background:#fff8f2;color:#9b4a3c;font-size:13px;font-weight:600}
+.talk-button:hover:not(:disabled){background:#fbe9dd}
+.board-tools .text-button{font-size:12px;gap:6px;color:#6f5446}
+.tool-hint{font-size:11px;color:#7d685b}
+.add-to-board{margin-left:auto;display:inline-flex;align-items:center;gap:10px;height:40px;padding:0 18px;border-radius:12px;background:#ad5444;color:#fff;font-size:13px;font-weight:600;box-shadow:0 3px 0 #873f35}
+.add-to-board:hover:not(:disabled,[aria-disabled=true]){background:#9a4a3c}
+.add-to-board:disabled,.add-to-board[aria-disabled=true]{opacity:1;cursor:not-allowed;background:#ecdcd3;color:#7a5446;box-shadow:0 3px 0 #d8c1b5}
+.add-to-board kbd{font:inherit;font-size:11px;opacity:.8;border:1px solid #ffffff66;border-radius:5px;padding:1px 6px}
+.board-tools .recording-controls{flex:1}
+.lesson-board .inline-notice,.lesson-board .judge-retry{margin:6px 24px 0 72px}
+.board-tabs button:focus-visible,.talk-button:focus-visible,.add-to-board:focus-visible,.desk-tool:focus-visible{outline:2px solid #c65f4e;outline-offset:2px}
+/* The marker tray holds the one progress bar */
+.board-ledge{display:flex;align-items:center;gap:14px;height:40px;padding:0 20px;background:linear-gradient(#e3cdb9,#d7bca5);border-radius:0 0 14px 14px;box-shadow:inset 0 3px 3px -2px #a7826466,0 14px 24px -16px #7a4e2d55}
+.ledge-label{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:9px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:#6e3f32;white-space:nowrap}
+.ledge-track{position:relative;flex:1;min-width:60px;align-self:stretch;display:flex;align-items:center}
+.board-ledge progress{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:8px;border:0;border-radius:99px;background:#f5e9dd;overflow:hidden;box-shadow:inset 0 1px 2px #a7826455}
+.board-ledge progress::-webkit-progress-bar{background:#f5e9dd;border-radius:99px}
+.board-ledge progress::-webkit-progress-value{background:linear-gradient(90deg,#e99a63,#c65f4e);border-radius:99px;transition:width .5s cubic-bezier(.2,.8,.3,1)}
+.board-ledge progress::-moz-progress-bar{background:linear-gradient(90deg,#e99a63,#c65f4e);border-radius:99px}
+.ledge-value{flex-shrink:0;min-width:0;overflow:hidden;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:650;color:#4f3329}
+.markers{display:flex;gap:6px}.markers i{display:block;width:34px;height:9px;border-radius:5px 2px 2px 5px;background:#c65f4e}.markers i+i{background:#748a68}
+.ledge-checking{position:absolute;right:0;top:calc(50% + 7px);font-size:9px;font-weight:700;letter-spacing:.5px;line-height:1;color:#5c3328;white-space:nowrap;animation:ledge-pulse 1.6s ease-in-out infinite}
+@keyframes ledge-pulse{50%{opacity:.55}}
+/* Notes inside the same board frame */
+.lesson-board .notes-pane{flex:1;min-height:0;display:flex;background:#fffdf8;padding:0 18px}
+.lesson-board .notes-heading .eyebrow{text-transform:uppercase;color:#a85a48}
+/* Stu's desk */
+.desk-column{grid-area:desk;min-width:0;display:flex;flex-direction:column;padding-top:22px}
+.stu-desk{position:relative;display:flex;flex-direction:column;align-items:center}
+.stu-desk .thought{position:relative;max-width:250px;margin:0 0 8px;padding:8px 14px;text-align:center;font-family:Georgia,serif;font-style:italic;font-size:13px;line-height:1.4;color:#6e5a44;background:#fffdf8;border:1px solid #ead8c8;border-radius:18px}
+.stu-desk .thought::after{content:'';position:absolute;left:50%;bottom:-11px;width:9px;height:9px;border-radius:50%;background:#fffdf8;border:1px solid #ead8c8}
+.desk-stu{position:relative;z-index:1;margin-bottom:-38px}
+.stu-desk .miso-character{width:150px!important;height:150px!important}
+.desk-top{position:relative;z-index:2;width:100%;height:58px;border-radius:12px;background:linear-gradient(180deg,#ecd0b4,#dcb592);box-shadow:inset 0 2px 0 #f7e6d4,0 9px 0 -2px #c09372,0 20px 24px -16px #7a4e2d77}
+.desk-top::before{content:'';position:absolute;left:24px;top:12px;width:70px;height:46px;border-radius:3px;background:repeating-linear-gradient(180deg,#fffdf8 0 7px,#f0dfd0 7px 8px);transform:rotate(-7deg);box-shadow:0 2px 3px #7a4e2d33}
+.desk-top::after{content:'';position:absolute;right:34px;top:24px;width:74px;height:7px;border-radius:2px 5px 5px 2px;background:linear-gradient(90deg,#3f302d 0 8%,#f1c27d 8% 18%,#e99a63 18%);transform:rotate(9deg)}
+.desk-mode{align-self:stretch;margin-top:16px;font-size:10px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:#97503f}
+.desk-tools{align-self:stretch;display:flex;gap:8px;margin-top:8px}
+.desk-tool{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 10px;border:1px solid #e4cdbd;border-radius:9px;background:#fffaf4;color:#6d4c40;font-size:12px}
+.desk-tool.icon-only{flex:0 0 34px;padding:0}
+.desk-tool:hover{background:#fbeee3}
+.desk-doodle{position:absolute;top:6px;right:-26px;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:8px;background:#fff6d6;border:1.5px solid #f0c24b;color:#6b4a10;font-size:11px;font-weight:700;transform:rotate(6deg);animation:doodle-pop .42s cubic-bezier(.2,.9,.3,1.3) both}
+.desk-doodle[data-kind=puzzled]{padding:0 8px;background:#fffdf8;border-color:#e4cdbd;color:#a85a48;font-family:Georgia,serif;font-size:18px}
+@keyframes doodle-pop{0%{opacity:0;transform:scale(0) rotate(6deg)}70%{transform:scale(1.2) rotate(6deg)}100%{transform:scale(1) rotate(6deg)}}
+/* Idle life: on child elements only, so the svg's own animationName stays testable */
+.stu-desk .miso-character:not(.miso-character--still) .stu-eye-white,.stu-desk .miso-character:not(.miso-character--still) .stu-eye{transform-box:fill-box;transform-origin:center;animation:stu-blink 5.5s infinite}
+.stu-desk .miso-character:not(.miso-character--still) .stu-stretch{animation:stu-breathe 3.6s ease-in-out infinite}
+@keyframes stu-blink{0%,95%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+@keyframes stu-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.015,.985)}}
+/* Lesson plan clipboard */
+.lesson-plan{grid-area:plan;align-self:start;position:relative;display:flex;flex-direction:column;min-height:0;max-height:100%;background:#fffaf4;border:1px solid #e7d4c8;border-radius:12px;box-shadow:0 10px 20px -16px #7a4e2d55}
+.lesson-plan::before{content:'';position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:70px;height:14px;border-radius:5px;background:#cfb39c;box-shadow:inset 0 -2px 0 #b99a82}
+.plan-scroll{overflow-y:auto;padding:20px 18px 16px;scrollbar-width:thin;background:linear-gradient(#fffaf400,#fffaf4 75%) 0 100%/100% 32px no-repeat local,radial-gradient(farthest-side at 50% 100%,#7a4e2d2e,#7a4e2d00) 0 100%/100% 14px no-repeat scroll}
+.plan-head{display:flex;align-items:center;justify-content:space-between}
+.plan-label,.loop-title{margin:0;font-family:inherit;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#a85a48}
+.plan-topic{margin:6px 0 2px;font-size:14px;font-weight:600;color:#3f302d}
+.plan-sources{margin:0 0 12px;font-size:11px;color:#6f5e54}
+.feynman-loop{margin:0 0 12px;padding:12px 0;border-top:1px solid #efe0d4;border-bottom:1px solid #efe0d4}
+.feynman-loop ol{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:2px}
+.feynman-loop li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:9px;align-items:center;padding:4px 8px;border-radius:9px}
+.loop-dot{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid #dcc3b2;background:#fffdf8;font-size:11px;font-weight:700;color:#7a5f52}
+.feynman-loop li strong{display:block;font-size:12px;font-weight:650;color:#3f302d}
+.feynman-loop li small{display:block;font-size:11px;line-height:1.4;color:#6f5e54}
+.feynman-loop li:not([aria-current=step]) small{display:none}
+.feynman-loop li.done .loop-dot{background:#e8eee2;border-color:#b9c9ad;color:#4f6645}
+.feynman-loop li[aria-current=step]{background:#f9e4df}
+.feynman-loop li[aria-current=step] .loop-dot{background:#c65f4e;border-color:#c65f4e;color:#fff}
+.loop-swap{margin:8px 0 0;font-size:11.5px;color:#4f6645}
+.lesson-plan .topic-panel p{font-size:12px;margin:0 0 9px}
+.plan-tip{margin:12px 0 0;padding-top:12px;border-top:1px dashed #e7d4c8;font-family:Georgia,serif;font-style:italic;font-size:12.5px;line-height:1.6;color:#7a6557}
+.lesson-plan .demo-explainer{margin:0 0 12px}
+.how-title{margin:0 0 12px;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#a85a48}
+/* The thought cloud keeps room for two lines, so a longer caption never moves Stu or the desk */
+@media(min-width:761px){.stu-desk .thought{min-height:calc(2.8em + 18px);display:flex;align-items:center;justify-content:center}}
+.recording-label,.recording-controls .primary{white-space:nowrap}
+.tab-dot{width:7px;height:7px;border-radius:50%;background:#c65f4e;box-shadow:0 0 0 2px #fffaf4}
+@keyframes scrim-in{from{opacity:0}}
+@media(max-width:1100px) and (min-width:761px){
+  .classroom{grid-template-columns:minmax(0,1fr) 240px;grid-template-areas:"board desk" "board .";column-gap:16px;padding:8px 16px 14px}
+  .stu-desk .miso-character{width:116px!important;height:116px!important}.desk-stu{margin-bottom:-30px}.desk-top::after{right:18px;width:56px}
+  .board-head{flex-wrap:wrap;row-gap:2px;padding:10px 20px 8px 72px}.board-head .eyebrow{flex-basis:100%}.board-head h2{font-size:21px}
+  .markers,.ledge-depth{display:none}.ledge-track{min-width:160px}
+  .board-tools{padding:10px 16px 12px 20px}
+  .rewrite-button{width:40px;height:40px;justify-content:center}.rewrite-button>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+}
+@media(max-height:780px) and (min-width:761px){.desk-column{padding-top:12px}.stu-desk .miso-character{width:112px!important;height:112px!important}.desk-stu{margin-bottom:-28px}}
+@media(max-width:1100px){
+  .lesson-plan{grid-area:auto;position:absolute;z-index:30;top:0;right:0;bottom:0;width:min(340px,calc(100% - 42px));max-height:none;border-radius:0;border-width:0 0 0 1px;box-shadow:-12px 0 35px #4b35241e}.lesson-plan::before{display:none}
+  .plan-scrim{position:absolute;inset:0;z-index:29;background:#3f302d29;animation:scrim-in .2s ease-out both}
+  .tool-hint{display:none}
+  .board-tools .recording-controls{flex:1 1 100%}
+}
+@media(max-width:760px){
+  .workspace-app .topbar{height:52px;min-height:52px;padding:0 12px;gap:8px}
+  .workspace-app .brand{font-size:22px}
+  .workspace-app .header-actions .quiet>span{display:inline;position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .workspace-app .header-actions .diagonal-arrow{display:none}
+  /* The honest status badge wraps to two lines instead of being cut to “Step 5 Previe…” */
+  .workspace-app .live-badge{min-width:0;max-width:84px;white-space:normal;line-height:1.15;padding:3px 6px;font-size:9px;text-align:center}
+  .workspace-app .header-actions{gap:8px}
+  .workspace-app .header-actions button{min-width:40px;min-height:40px}
+  .classroom{display:flex;flex-direction:column;padding:0;gap:0;background:#fffdf8}
+  .board-column{display:contents}
+  .board-tabs{order:0;height:38px;padding:0 10px;background:#f3e8dd}
+  .board-tabs button{height:30px;padding:0 12px}.board-tabs button[aria-pressed=true]{height:34px}
+  .desk-column{order:1;padding:0}
+  .lesson-board{order:2;border:0;border-top:6px solid #e3cdb9;border-radius:0;box-shadow:none}
+  .board-ledge{order:3;height:34px;padding:0 14px;gap:10px;border-radius:0}
+  .ledge-label,.markers,.ledge-depth{display:none}
+  .board-head{padding:8px 14px 6px 44px;border-bottom:0}.board-head .eyebrow,.board-head .depth-chip{display:none}.board-head h2{font-size:17px}
+  .stu-desk{flex-direction:row;align-items:flex-end;gap:10px;height:76px;padding:0 12px;background:#f3e8dd;overflow:hidden}
+  .desk-stu{margin:0 0 4px}
+  .stu-desk .miso-character{width:60px!important;height:60px!important}
+  .desk-top{position:absolute;left:0;right:0;bottom:0;height:16px;border-radius:0;box-shadow:inset 0 2px 0 #f7e6d4}
+  .desk-top::before,.desk-top::after{display:none}
+  .stu-desk .thought{order:1;flex:1;min-width:0;max-width:none;margin:0 0 22px;padding:6px 11px;text-align:left;font-size:12px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  .stu-desk .thought::after{display:none}
+  .desk-mode{display:none}
+  .desk-tools{order:2;align-self:auto;margin:0 0 22px;gap:6px}
+  .desk-tool{flex:0 0 34px;width:34px;padding:0}
+  .desk-tool>span,.rewrite-button>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .desk-doodle{top:-2px;right:-14px;font-size:9px;padding:1px 5px}
+  .classroom:has(.writing-line textarea:focus) .stu-desk{height:48px}
+  .classroom:has(.writing-line textarea:focus) .stu-desk .miso-character{width:36px!important;height:36px!important}
+  /* While typing the strip shrinks, but Stop speaking stays reachable when Stu is talking */
+  .classroom:has(.writing-line textarea:focus) .desk-tools:not(.is-speaking),.classroom:has(.writing-line textarea:focus) .desk-tools.is-speaking .icon-only{display:none}
+  .classroom:has(.writing-line textarea:focus) .desk-doodle,.classroom:has(.writing-line textarea:focus) .board-head{display:none}
+  .classroom:has(.writing-line textarea:focus) .desk-stu{margin-bottom:10px}
+  .classroom:has(.writing-line textarea:focus) .desk-tools{margin-bottom:18px}.classroom:has(.writing-line textarea:focus) .desk-tool{flex-basis:28px;width:28px;height:28px}
+  .board-thread{padding:8px 14px 12px 0;background-image:linear-gradient(90deg,transparent 33px,#efc0b3 33px,#efc0b3 34px,transparent 34px),radial-gradient(circle,#eadbcd 1.1px,transparent 1.5px);background-size:auto,20px 20px}
+  .board-entry,.writing-line{grid-template-columns:34px minmax(0,1fr);column-gap:10px}
+  .entry-margin{font-size:17px;line-height:28px;padding-right:6px}
+  .board-entry .message-bubble{font-size:15px;line-height:28px}
+  .stu-note{margin:8px 0 14px 30px;max-width:calc(100% - 30px);padding:10px 13px 12px}
+  .stu-note .message-bubble{font-size:14px}
+  .board-empty{margin-left:44px;font-size:14px;line-height:28px}
+  .writing-line{padding:6px 14px 0 0;background-image:linear-gradient(90deg,transparent 33px,#efc0b3 33px,#efc0b3 34px,transparent 34px),repeating-linear-gradient(180deg,transparent 0 27px,#f2e7dc 27px 28px);background-position:0 6px}
+  .writing-line textarea{font-size:16px;line-height:28px;height:auto;min-height:56px;max-height:112px}
+  .board-tools{padding:8px 12px 10px;gap:8px}
+  .talk-button{flex:1;justify-content:center;height:44px}
+  .rewrite-button{width:44px;height:44px;justify-content:center}
+  .tool-hint{display:none}
+  .add-to-board{height:44px;margin-left:auto}.add-to-board kbd{display:none}
+  .board-tools .recording-controls{flex:1 1 100%}
+  .phase-divider{margin:14px 14px 14px 44px}
+  .transition-ribbon,.lesson-board .inline-notice,.lesson-board .judge-retry{margin:8px 12px 0}
+  .lesson-board .notes-pane{padding:0 10px}
+  .topic-fields input,.topic-fields select,.field-label input,.paste-editor{font-size:16px}
+}
+@media(prefers-reduced-motion:reduce){.scribble path{stroke-dashoffset:0}}
+/* Shift+Enter line breaks stay visible on the board; how-strip items line up when one wraps */
+.board-entry .message-bubble,.stu-note .message-bubble{white-space:pre-line}
+.how-strip>div{align-content:start}
+/* The lesson plan sheet runs the full height of the classroom (an abspos grid item would otherwise shrink to fit) */
+@media(max-width:1100px){.lesson-plan{align-self:stretch}}
+/* Phone, while writing: keep the shrunken desk strip's thought cloud inside the strip */
+@media(max-width:760px){.classroom:has(.writing-line textarea:focus) .stu-desk .thought{margin-bottom:14px;padding:4px 10px;-webkit-line-clamp:1}}
+/* Citations under Stu's board lines: readable and tappable */
+.board-entry .citations button,.stu-note .citations button{font-size:12px;min-height:36px;padding:8px 10px;color:#7a6340}
+@media(pointer:coarse){.board-entry .citations button,.stu-note .citations button{min-height:44px}}
+/* Short landscape screens (phones turned sideways): give the board the height */
+@media(max-height:500px) and (min-width:761px){
+  .workspace-app .topbar{height:48px;min-height:48px}
+  .board-head,.board-empty,.tool-hint,.desk-mode,.desk-top::before,.desk-top::after{display:none}
+  .board-tools{flex-wrap:nowrap;padding:6px 16px 8px 72px}
+  .add-to-board{margin-left:auto}
+  .desk-column{padding-top:6px}
+  .stu-desk .thought{font-size:12px}
+  .stu-desk .miso-character{width:72px!important;height:72px!important}
+  .desk-stu{margin-bottom:-18px}
+  .desk-top{height:28px}
+  .desk-tool:not(.icon-only)>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+}
+@media(max-height:500px) and (min-width:761px) and (max-width:1100px){.classroom{grid-template-columns:minmax(0,1fr) 150px;padding:4px 12px 8px;column-gap:12px}}
+@media(max-height:500px) and (max-width:760px){
+  .workspace-app .topbar{height:44px;min-height:44px}.workspace-app .header-actions button{min-height:36px}
+  .board-tabs{height:32px}.board-tabs button{height:26px}.board-tabs button[aria-pressed=true]{height:30px}
+  .board-head,.board-empty,.desk-doodle{display:none}
+  .stu-desk{height:56px}.stu-desk .miso-character{width:40px!important;height:40px!important}
+  .stu-desk .thought{-webkit-line-clamp:1;margin-bottom:20px}.desk-tools{margin-bottom:19px}
+  .board-tools{padding:4px 12px 6px}.talk-button,.rewrite-button,.add-to-board{height:40px}
+  .board-ledge{height:28px}
+}
+/* Narrow phones: room for the full two- or three-line live badge (End keeps its full accessible name) */
+@media(max-width:360px){.talk-button{padding:0 10px;gap:5px;font-size:12px;line-height:1.15}.add-to-board{padding:0 12px}.workspace-app .brand{font-size:19px;gap:6px}.workspace-app .topbar{gap:6px}.workspace-app .header-actions{gap:6px}.workspace-app .end-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+@media(max-height:500px) and (min-width:761px){.writing-line textarea{max-height:96px}}
+@media(max-height:500px) and (max-width:760px){.writing-line textarea{max-height:56px}}

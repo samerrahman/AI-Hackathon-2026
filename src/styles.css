@@ -99,7 +99,7 @@ body{background:linear-gradient(180deg,#fcf8f2 0%,#f9f2e9 100%)}
 .session-chrome{padding-bottom:7px}.session-tabs{height:34px}.top-progress{margin-top:6px}.top-progress>div:first-child{margin-bottom:6px}.learning-progress-track{height:4px}@media(max-width:760px){.session-tabs{height:34px}.top-progress{margin-top:5px}.top-progress>div:first-child{margin-bottom:5px}}
 
 /* Teach Stu features (topic, depth, hidden-rubric progress, notes tab, judge evidence) in this design */
-.miso-character[role=img]{cursor:default}
+.miso-character[role=img]:not([data-clickable]){cursor:default}
 .topic-fields{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px 18px;padding:18px 26px 4px}
 .topic-fields label{display:flex;flex-direction:column;gap:7px;font-size:11px;font-weight:600;color:var(--ink)}
 .topic-fields input,.topic-fields select{width:100%;height:42px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit;font-size:13px;font-weight:400}
@@ -134,3 +134,9 @@ body{background:linear-gradient(180deg,#fcf8f2 0%,#f9f2e9 100%)}
 .start-talking{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-size:11px;color:var(--muted)}
 .start-talking:hover{color:var(--orange)}
 @media(min-width:761px){.welcome-hero h1{font-size:clamp(48px,5.4vw,76px)}.welcome-hero h1 em{white-space:nowrap}}
+.talk-status{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;font-size:11px;color:var(--muted)}
+.error-banner{position:sticky;top:0;z-index:40}
+.topic-fields input[aria-invalid=true]{border-color:#c65f4e;box-shadow:0 0 0 3px #c65f4e26}
+.topic-fields .field-error{color:#a63f39;font-weight:600}
+.judge-retry{margin:6px 0 0;font-size:10px;color:#a63f39}
+.judge-retry .text-button{font-size:10px;display:inline;margin-left:4px}

@@ -10,3 +10,4 @@ server/.state-key
 .miso/
 test-results/
 playwright-report/
+/.worktrees/

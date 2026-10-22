@@ -42,5 +42,6 @@ export const outlineSchema = z.object({ concepts: z.array(z.object({ title: z.st
 export const verificationSchema = z.object({ verdict: z.enum(['approved', 'rejected', 'uncertain']), reason: z.string().min(1).max(1000), sourceIds: z.array(id).min(1).max(10) });
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public code = 'REQUEST_FAILED') { super(message); }
+  /** detail: a content-free reason for diagnostics (e.g. which schema rule failed); never user or model text. */
+  constructor(public status: number, message: string, public code = 'REQUEST_FAILED', public detail?: string) { super(message); }
 }

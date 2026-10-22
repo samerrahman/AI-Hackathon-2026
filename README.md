@@ -1,84 +1,105 @@
+<div align="center">
+
+<img src="public/stu.svg" alt="Stu, a round yellow face with mismatched eyes and a curl of hair" width="120" />
+
 # Teach Stu
 
-**If you can teach it, you know it.** Paste course notes or upload text-based PDFs, choose one depth, and teach Stu in your own words. Stu is a cheerful, deliberately dim AI student who asks one focused question at a time. Once you have taught the whole topic, Stu teaches it back and quizzes you.
+### If you can teach it, you know it.
 
-Teach Stu preserves the React study workspace, PDF viewer, source navigation, local session saving, keyboard and reduced-motion behavior, sample demos, and optional voice. It uses model inference and session-specific state. It does **not** train or fine-tune a model, and Stu does not permanently learn from users.
+Stu is your new AI student: cheerful, curious, and a little dim. Bring your lecture notes and explain the ideas in your own words. Catch his mix-ups along the way. When he finally gets it, he teaches it back and quizzes you.
 
-## How Teach Stu uses Step 5 Preview
+**[Try it at brodidnot.study →](https://www.brodidnot.study)**
 
-Every live topic calls StepFun's **`step-5-preview`**: once to build the private rubric from your notes, then on every message you send, before Stu is allowed to reply. If that call fails, Stu does not answer and your draft stays in the box for a retry.
+![StepFun Step 5 Preview](https://img.shields.io/badge/judge-step--5--preview-c65a2e)
+![Stu on Step 3.7 Flash](https://img.shields.io/badge/student-step--3.7--flash-ffca4f)
+![React 19](https://img.shields.io/badge/React-19-61dafb)
+![Hosted on Vercel](https://img.shields.io/badge/hosted%20on-Vercel-000)
 
-| Step | Model | What it does | What it sees |
+</div>
+
+---
+
+## Why
+
+Rereading notes feels like learning. Explaining them shows what you actually know. Teach Stu flips the usual AI tutor around: **the AI doesn't help you, you help the AI.** It catches the gaps in your understanding without ever handing you the answer.
+
+## How it works
+
+1. **Bring the material.** Upload text-based PDFs, paste notes, or choose **or just start talking** with only a topic title.
+2. **Pick a depth, once.** *Big picture*, *Exam ready*, or *Expert*. It stays fixed for the topic, so the bar can't be moved.
+3. **Teach Stu.** Explain one idea at a time. Stu reacts in his own words, asks one question, and sometimes states a planted mistake for you to catch.
+4. **Watch one bar.** A hidden, pessimistic Judge grades every message against a private *cover → explain → connect* rubric. You only see overall progress, so you can't game it.
+5. **Learn it back.** Once you've taught everything, Stu teaches the topic back from your verified wording and quizzes you, with citations to your notes.
+
+## Two models, one student
+
+```mermaid
+flowchart LR
+    You([You]) -->|explanation| Stu["Stu<br/><i>step-3.7-flash</i><br/>replies in ~10 s"]
+    Stu -->|reply| You
+    You -.->|same message, in the background| Judge["Judge<br/><i>step-5-preview</i><br/>grades in ~20–40 s"]
+    Judge -.->|credits · revocations · problems| Bar[[Progress bar]]
+    Judge -.->|one thing to ask about next| Stu
+```
+
+| Role | Model | Job | Sees |
 | --- | --- | --- | --- |
-| Rubric | `step-5-preview` | Turns your notes into hidden *cover → explain → connect* requirements at the depth you chose | Your notes, title, depth |
-| Judge (every turn) | `step-5-preview` | Pessimistically grades your latest message; every credit must quote your exact words, which the server re-checks | Relevant notes, rubric, conversation |
-| Stu (every turn) | `step-3.7-flash` | The visible, deliberately dim student: one short question, sometimes a planted mix-up for you to catch | Conversation and a sanitized note from the Judge, never the notes or rubric |
-| Re-learn | `step-5-preview` → `step-3.7-flash` | After you finish, the Judge writes a source-grounded recap and quiz; Stu delivers it | Verified teacher quotes, notes |
-| Voice (optional) | `stepaudio-3-asr-max`, `stepaudio-3-tts` | Transcribes your spoken explanation for you to review before sending; reads Stu's replies aloud | Your recording; Stu's reply text |
+| **Planner** | `step-5-preview` | Turns your notes (or just the title) into a hidden rubric | Notes, title, depth |
+| **Stu** | `step-3.7-flash` | The visible, deliberately dim student | Only the chat, plus one phrase of yours to ask about |
+| **Judge** | `step-5-preview` | Grades every message in the background; every credit must quote your exact words, and the server re-checks each quote | Relevant notes, rubric, conversation |
+| **Re-learn** | `step-5-preview` → `step-3.7-flash` | Writes a checked recap and quiz; Stu teaches it back | Your verified quotes, notes |
+| **Voice** *(optional)* | `stepaudio-3-asr-max`, `stepaudio-3-tts` | Speak your explanation (you review the transcript first); hear Stu's replies | Your recording, Stu's text |
 
-The Judge runs on Step 5 Preview because grading is the part that has to be right. Stu runs on a faster model so replies come back quickly, and he can't leak answers he was never given. You stay in control: you pick the depth, review every transcript before it's sent, can pause, end, or delete a session, and the **Step 5 Preview · Live** badge only appears after a turn whose Judge actually used `step-5-preview`. Sample sessions are labeled **Sample demo** and use fixed responses instead of a model.
+**Why the split?** StepFun's models think before they answer. Grading *and* writing Stu's reply in one Step 5 call took over 100 seconds. Now Stu answers on the faster model right away, while Step 5 grades in the background. Every request is streamed. Messages are graded in order, and a failed grading stays queued for the next one. The plan is built from two parallel Step 5 samples, and the first valid one wins. The **Step 5 Preview · Live** badge appears only after a grading that actually ran on `step-5-preview`.
 
-## Run locally
+## Honest by design
 
-Use Node.js 22.13 or newer:
+- **Stu never sees your notes or the rubric**, so he can't leak answers.
+- **Credits require your own words.** A quote the model invents or rewords fails the server's check, as does "yes, exactly". A later contradiction takes credit back.
+- **Sample sessions are labeled *Sample demo*** and use fixed responses, not a model.
+- **No training.** Stu doesn't permanently learn from you. Notes and conversations stay in your browser (IndexedDB), and the rubric lives in an encrypted (AES-GCM) state token that the browser can't read.
 
-```sh
-npm ci
-npm run dev
-```
+## Run it locally
 
-Open **http://127.0.0.1:5173**. Vite proxies `/api` to the Express server on loopback port 3001. The deterministic **Try a sample session** path works without API keys and always shows a **Sample demo** badge. Its limited fixture responses are for exploring the UI, not judging arbitrary course material.
-
-## Public deployment
-
-The public address is [brodidnot.study](https://brodidnot.study). Firebase Hosting currently serves a static preview for free. The full site uses Vercel's Vite hosting and a same-origin Express function; the Vercel project needs server-side `STEPFUN_API_KEY` and a stable random `SESSION_SECRET` in its Production and Preview environment variables. Keep both out of Git and Vite variables. Deploy and verify the Vercel preview before moving the domain's DNS from Firebase to Vercel.
+Requires Node.js 22.13+.
 
 ```sh
 npm ci
-npm run build
-vercel deploy
+cp .env.example .env   # add STEPFUN_API_KEY for live teaching
+npm run dev            # http://127.0.0.1:5173 (API on :3001)
 ```
 
-`vercel.json` sends `/api` requests to the Express function and serves Vite's `dist` files for the rest. Vercel Fluid Compute is enabled with a 180-second maximum request duration. See [docs/DOMAIN.md](docs/DOMAIN.md) for the current Porkbun records; update them to Vercel's project-specific values only after the preview works.
+Without a key, **Try a sample session** still works end to end.
 
-## Start a live topic
+| Command | What it does |
+| --- | --- |
+| `npm run check` | Type-check |
+| `npm test` | Server and library tests (mocked providers, no API credits) |
+| `npm run test:e2e` | Playwright browser tests (needs `npm run dev` running) |
+| `npm run build` | Production build |
 
-```sh
-cp .env.example .env
-```
+## Deploy
 
-Set `STEPFUN_API_KEY` in the Git-ignored `.env`, restart `npm run dev`, and reload the page. `STEPFUN_BASE_URL` defaults to `https://api.stepfun.ai/v1`. The hidden Judge uses `STEPFUN_JUDGE_MODEL=step-5-preview` by default. The visible Stu uses `STEPFUN_STU_MODEL=step-3.7-flash` by default. For older configurations, `STEPFUN_MODEL` is used as the Judge model only when `STEPFUN_JUDGE_MODEL` is absent. The **Step 5 Preview · Live** badge appears only after a complete, validated dual-model turn whose Judge used `step-5-preview`; key presence alone is labeled unverified.
+Vercel Hobby serves the Vite frontend and runs the Express API as one same-origin function (`api/index.ts`, 180 s limit; see `vercel.json`). Set these in the Vercel project, never with a `VITE_` prefix:
 
-Give the topic a title, choose **Big picture**, **Exam ready**, or **Expert**, and paste notes or upload text-based PDFs. Pasting notes is the simplest path. You can also choose **or just start talking** with no notes at all: Step 5 Preview then builds the rubric from the title and depth and judges from its own mainstream knowledge. Notes are still better for course-specific details, because the Judge can check your claims against them and re-learn can cite pages. Depth is fixed for that topic; start a new topic to change it. The user sees one overall progress bar, never the private rubric. A comprehensive explanation can satisfy several requirements. If later words contradict an earlier explanation, the bar can decrease. Once all requirements are credited and no factual problem remains, the conversation enters **Re-learn** mode: Stu teaches back verified wording, corrects earlier errors against the notes, and asks one quiz question at a time.
+| Variable | |
+| --- | --- |
+| `STEPFUN_API_KEY` | Required. Used by the Judge, Stu, and voice |
+| `SESSION_SECRET` | Required. A long random value; keep it stable so saved sessions stay readable |
+| `ENABLE_JUDGE_DEBUG` | Optional. `true` adds a **Show Judge Evidence** setting |
+| `STEPFUN_{RUBRIC,JUDGE,BRIEF,STU}_REASONING_EFFORT` | Optional. Default `low` |
+| `STEPFUN_{RUBRIC,JUDGE,BRIEF,STU}_TIMEOUT_MS` | Optional. Defaults 150 / 150 / 60 / 35 s |
 
-During teaching, the hidden Judge receives relevant note text, the private rubric, and the conversation. Stu receives the visible conversation and a sanitized, teacher-grounded director note; Stu does not receive the notes or rubric. During re-learn, the Judge may give Stu a validated, source-grounded teaching brief. See [server/README.md](server/README.md) for the state and evidence rules.
+DNS for `brodidnot.study` is in [docs/DOMAIN.md](docs/DOMAIN.md).
 
-The same StepFun key enables requested transcription and text-to-speech. Microphone input remains explicit: record, stop, review or edit the transcript, then send it. `ENABLE_JUDGE_DEBUG=true` exposes a **Show Judge Evidence** setting for sanitized evidence IDs, verified quotes, problem categories, focus, and model timing. It defaults off and never displays private requirement text or raw model responses.
+## Limits
 
-## Real Step 5 smoke test
+Up to 5 files per topic, 20 MB and 100 pages per PDF, and 300,000 extracted characters in total. Recordings are capped at 3 minutes. Scanned PDFs need OCR, which isn't supported yet, so paste their text instead. Long notes are sampled evenly per page when the plan is built. The Judge still reads the full passages it needs.
 
-A real provider call was not made during this implementation. To test with an authorized key:
+## Under the hood
 
-1. Put `STEPFUN_API_KEY` in `.env`; leave the default Judge and Stu model IDs. Run `npm run dev` and open `http://127.0.0.1:5173`.
-2. Enter a title, paste a few sentences of course notes, choose **Big picture**, and start teaching. The topic should open with a zeroed overall bar. The configured state alone should not show a live badge.
-3. Send a substantive typed explanation in your own words. Confirm Stu asks one short question, the overall progress updates only for supported teaching, and **Step 5 Preview · Live** appears after that complete turn. Open Settings to confirm it reports a completed live turn.
-4. Send a vague answer such as “yes, exactly” and confirm it does not earn new credit. If a provider error occurs, confirm the draft remains available for retry.
+Vite + React 19 · Express · Zod · pdf.js · strict TypeScript · `node:test` · Playwright. State and evidence rules are in [server/README.md](server/README.md), and every architectural decision is in [docs/DECISIONS.md](docs/DECISIONS.md). Contributors start with [AGENTS.md](AGENTS.md).
 
-Use original pasted notes for this test; the bundled samples are deterministic. A live account with model access and sufficient balance is required. The integration follows official [StepFun chat completions](https://platform.stepfun.ai/docs/en/api-reference/chat/chat-completion-create), [structured output](https://platform.stepfun.ai/docs/en/guides/developer/json-mode), and [error handling](https://platform.stepfun.ai/docs/en/guides/developer/exception) documentation.
+## Team
 
-## Data and limits
-
-Original PDFs, extracted text, drafts, conversation, progress counts, and an opaque encrypted state token are saved in this browser's IndexedDB. The private rubric and evidence state exist only inside authenticated AES-GCM server state, bound to the topic and actual document text. The browser cannot read rubric requirements from the token. Relevant extracted text and conversation are sent to StepFun for live Judge calls. Stu receives conversation and a safe director note in teaching mode. Requested voice sends audio or response text to StepFun. Raw recordings are not persisted by Teach Stu. Provider account retention settings still apply; deleting local data cannot retract requests already processed by providers.
-
-Collections allow five files, 20 MB and 100 pages per file, and 300,000 extracted characters total. Recordings are limited to three minutes and 12 MB. Scanned-PDF OCR is unavailable. PDF extraction can lose mathematical layout, so inspect formulas against the original page. The server stores no document or conversation database. Its local encryption key remains in `.miso/state-key` for compatibility with existing saved sessions; keep it stable across restarts or set `SESSION_SECRET`.
-
-## Verify
-
-```sh
-npm run check
-npm test
-npm run build
-npm run test:e2e
-```
-
-`npm test` uses mocked providers and consumes no API credits. The browser tests also use samples or mocked responses. Build output is served with `npm start` at **http://127.0.0.1:3001**. Live model behavior and real microphone playback require a separate authorized smoke test.
+Built for the AI LA Hackathon 2026 by [@ruxinsheng](https://github.com/ruxinsheng), [@jamlol123](https://github.com/jamlol123), [@zenoro0](https://github.com/zenoro0), and [@samerrahman](https://github.com/samerrahman): Lucy's teaching engine, Lea's design, James's voice, and Samer's deployment and speed work.

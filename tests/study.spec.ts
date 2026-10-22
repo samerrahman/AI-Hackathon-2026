@@ -60,20 +60,30 @@ test('mocked live dual-model turn shows honest status, one bar, debug evidence, 
     topicId: 'mock-topic', stateToken: 'opaque-encrypted-state-token', progress: { total: 8, credited: 0, percent: 0, mode: 'teach' },
     message: { id: 'welcome', role: 'assistant', text: 'Hi! Teach me this topic. What should I know first?' }, liveStep5: false,
   } }));
-  let calls = 0;
+  // Stu replies first (/api/teach); the Step 5 Judge grades in the background (/api/judge).
+  let replies = 0; let gradings = 0; let lastText = ''; let lastMessageId = '';
   await page.route('**/api/teach', async route => {
-    calls++;
+    replies++;
+    ({ text: lastText, messageId: lastMessageId } = route.request().postDataJSON());
+    await route.fulfill({ json: {
+      topicId: 'mock-topic', stateToken: `opaque-state-reply-${replies}`, progress: replies === 1 ? { total: 8, credited: 0, percent: 0, mode: 'teach' } : { total: 8, credited: 2, percent: 25, mode: 'teach' },
+      message: { id: `stu-${replies}`, role: 'assistant', text: replies === 1 ? 'Wait, why does opening the switch stop the lamp?' : 'So another branch is like a second road?' },
+      judgePending: true, liveStep5: false,
+    } });
+  });
+  await page.route('**/api/judge', async route => {
+    gradings++;
     const request = route.request().postDataJSON();
     const sourceId = request.documents[0].spans[0].id;
-    await route.fulfill({ json: {
-      topicId: 'mock-topic', stateToken: `opaque-state-after-${calls}`, progress: calls === 1 ? { total: 8, credited: 2, percent: 25, mode: 'teach' } : { total: 8, credited: 8, percent: 100, mode: 'relearn' },
-      message: calls === 1 ? { id: 'stu-1', role: 'assistant', text: 'Wait, why does opening the switch stop the lamp?' }
-        : { id: 'stu-2', role: 'assistant', text: 'You taught me that the path must be closed. An open switch breaks it. What happens if there is another branch?', sourceIds: [sourceId] },
-      transition: calls > 1, liveStep5: true,
-      debug: { credits: [{ itemId: 'opaque-item-1', quote: request.text }], revocations: [], problems: [],
-        focus: { type: 'vague', anchorQuote: request.text, instruction: 'ask_clarify' }, mistakeAccepted: false,
-        models: { judge: 'step-5-preview', stu: 'step-3.7-flash' }, durationMs: { judge: 12, stu: 4 } },
-    } });
+    const debug = { credits: [{ itemId: 'opaque-item-1', quote: lastText }], revocations: [], problems: [],
+      focus: { type: 'vague', anchorQuote: lastText, instruction: 'ask_clarify' }, mistakeAccepted: false,
+      models: { judge: 'step-5-preview', stu: 'step-3.7-flash' }, durationMs: { judge: 12, stu: 0 } };
+    if (gradings === 1) return route.fulfill({ json: { topicId: 'mock-topic', stateToken: 'opaque-state-graded-1', progress: { total: 8, credited: 2, percent: 25, mode: 'teach' },
+      judgedMessageIds: [lastMessageId], liveStep5: true, debug } });
+    if (gradings === 2) return route.fulfill({ json: { topicId: 'mock-topic', stateToken: 'opaque-state-graded-2', progress: { total: 8, credited: 8, percent: 100, mode: 'relearn' },
+      judgedMessageIds: [], transition: true, next: 'brief', liveStep5: true } });
+    return route.fulfill({ json: { topicId: 'mock-topic', stateToken: 'opaque-state-teach-back', progress: { total: 8, credited: 8, percent: 100, mode: 'relearn' }, transition: true, liveStep5: true,
+      message: { id: 'stu-teach-back', role: 'assistant', text: 'You taught me that the path must be closed. An open switch breaks it. What happens if there is another branch?', sourceIds: [sourceId] } } });
   });
   await pasteTopic(page);
   await expect(page.getByText('Step 5 Preview · Live')).toHaveCount(0);
@@ -148,4 +158,74 @@ test('“or just start talking” starts a topic with no notes and no Notes tab'
   expect(topicBody?.documents).toEqual([]);
   await expect(page.getByRole('button', { name: 'Notes', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Look at my notes' })).toHaveCount(0);
+});
+
+test('“or just start talking” without a title points at the title field, and errors stay visible when scrolled', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const talk = page.getByRole('button', { name: 'or just start talking' });
+  await talk.scrollIntoViewIfNeeded();
+  await talk.click();
+  const title = page.getByRole('textbox', { name: 'Topic title' });
+  await expect(title).toHaveAttribute('aria-invalid', 'true');
+  await expect(title).toBeFocused();
+  await expect(title).toBeInViewport();
+  await expect(page.getByText('Give your topic a title first, then pick how to start.')).toBeVisible();
+  await page.route('**/api/topic', route => route.fulfill({ status: 504, json: { error: 'StepFun took too long. Your message is safe; retry.', code: 'PROVIDER_TIMEOUT' } }));
+  await title.fill('Photosynthesis');
+  await expect(title).toHaveAttribute('aria-invalid', 'false');
+  await talk.scrollIntoViewIfNeeded();
+  await talk.click();
+  await expect(page.getByRole('alert')).toContainText('StepFun took too long');
+  await expect(page.getByRole('alert')).toBeInViewport();
+});
+
+test('a sent explanation shows at once, typing meanwhile never cancels Stu, and unsent words come back', async ({ page }) => {
+  let releaseFirst = () => {};
+  const firstHeld = new Promise<void>(resolve => { releaseFirst = resolve; });
+  let teachCalls = 0;
+  await page.route('**/api/topic', route => route.fulfill({ json: { topicId: 'send-topic', stateToken: 'state-0', progress: { total: 6, credited: 0, percent: 0, mode: 'teach' },
+    message: { id: 'welcome', role: 'assistant', text: 'Hi! Teach me this topic. What should I know first?' }, liveStep5: false } }));
+  await page.route('**/api/teach', async route => {
+    teachCalls++;
+    if (teachCalls === 1) {
+      await firstHeld;
+      return route.fulfill({ json: { topicId: 'send-topic', stateToken: 'state-1', progress: { total: 6, credited: 0, percent: 0, mode: 'teach' },
+        message: { id: 'stu-1', role: 'assistant', text: 'Oh! So what makes the leaf green?' }, liveStep5: true } });
+    }
+    if (teachCalls === 2) return route.fulfill({ status: 502, json: { error: 'Stu returned an incomplete response. Your message is safe; retry.', code: 'INVALID_MODEL_OUTPUT' } });
+    await new Promise(() => {}); // Never answers: the page reloads mid-send.
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', '/stu.svg');
+  expect((await page.request.get('/stu.svg')).ok()).toBe(true);
+  await page.getByRole('textbox', { name: 'Topic title' }).fill('Photosynthesis');
+  await page.getByRole('button', { name: 'or just start talking' }).click();
+  const box = page.getByRole('textbox', { name: 'Your explanation' });
+  const sent = page.locator('.student-message .message-bubble');
+  await box.fill('Plants use light to turn water and carbon dioxide into sugar.');
+  await page.getByRole('button', { name: 'Send explanation' }).click();
+  // On screen as sent, box cleared, Stu thinking, all before the server answers.
+  await expect(sent).toHaveText(['Plants use light to turn water and carbon dioxide into sugar.']);
+  await expect(box).toHaveValue('');
+  await expect(page.getByLabel('Stu is thinking')).toBeVisible();
+  await box.fill('Chlorophyll');
+  releaseFirst();
+  await expect(page.locator('.stu-message:not(.pending-message) .message-bubble').last()).toHaveText('Oh! So what makes the leaf green?');
+  await expect(box).toHaveValue('Chlorophyll');
+  // A failed send takes the bubble back out and returns the words to the box.
+  await box.fill('Chlorophyll absorbs red and blue light.');
+  await page.getByRole('button', { name: 'Send explanation' }).click();
+  await expect(page.getByRole('alert')).toContainText('Stu returned an incomplete response');
+  await expect(box).toHaveValue('Chlorophyll absorbs red and blue light.');
+  await expect(sent).toHaveCount(1);
+  // Reloading mid-send never saves an unconfirmed message; its words wait in the box.
+  await page.getByRole('button', { name: 'Send explanation' }).click();
+  await expect(sent).toHaveCount(2);
+  await expect(page.locator('.save-indicator')).toContainText('Saved on this device');
+  await page.waitForTimeout(300);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Resume session' }).click();
+  await expect(box).toHaveValue('Chlorophyll absorbs red and blue light.');
+  await expect(sent).toHaveCount(1);
 });

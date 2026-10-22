@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodePcm16Wav } from '../lib/wav';
 import { speechChunks } from '../lib/speech';
+import { authHeaders, expiredMessage, supabaseClient } from '../lib/auth';
 
 interface VoiceOptions {
   enabled: boolean;
@@ -26,6 +27,7 @@ function recordingError(error: unknown): string {
 async function responseError(response: Response, fallback: string): Promise<string> {
   try {
     const body: unknown = await response.json();
+    if (response.status === 401 && body && typeof body === 'object' && 'code' in body && body.code === 'AUTH_REQUIRED') return expiredMessage;
     if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
       return body.error;
     }
@@ -216,7 +218,7 @@ export function useVoice(options: VoiceOptions) {
           if (wav.byteLength > MAX_RECORDING_BYTES) throw new Error('The prepared recording exceeds 12 MB. Record a shorter explanation or type it instead.');
           const form = new FormData();
           form.append('audio', new Blob([wav], { type: 'audio/wav' }), 'explanation.wav');
-          const response = await fetch('/api/transcribe', { method: 'POST', body: form, signal: request.signal });
+          const response = await fetch('/api/transcribe', { method: 'POST', body: form, headers: supabaseClient() ? await authHeaders() : undefined, signal: request.signal });
           if (!response.ok) throw new Error(await responseError(response, 'Transcription is unavailable. Try again or type your explanation.'));
           const result: unknown = await response.json();
           if (!result || typeof result !== 'object' || !('text' in result) || typeof result.text !== 'string' || !result.text.trim()) {
@@ -281,7 +283,7 @@ export function useVoice(options: VoiceOptions) {
       const chunks = speechChunks(text);
       const fetchAudio = async (chunk: string) => {
         const response = await fetch('/api/speech', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...supabaseClient() ? await authHeaders() : {} },
           body: JSON.stringify({ text: chunk }), signal: request.signal,
         });
         if (!response.ok) throw new Error(await responseError(response, 'Spoken audio is unavailable. You can read the response instead.'));

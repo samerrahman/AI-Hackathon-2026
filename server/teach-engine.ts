@@ -20,6 +20,8 @@ export interface TeachState {
   pendingBrief?: boolean;
   /** A teacher-grounded question from the last grading, used once for Stu's next reply. */
   lastFocus?: Focus | null;
+  /** The Supabase account that owns this topic, when accounts are on. Tokens sealed before accounts have none. */
+  userId?: string;
 }
 export interface SafeDebug {
   credits: { itemId: string; quote: string }[]; revocations: { itemId: string; quote: string }[];
@@ -42,15 +44,22 @@ function seal(state: TeachState): string {
   const bytes = Buffer.concat([cipher.update(JSON.stringify(state), 'utf8'), cipher.final()]);
   return Buffer.concat([iv, cipher.getAuthTag(), bytes]).toString('base64url');
 }
-export function openTeachState(token: string, topicId: string, documents: TeachTurnRequest['documents']): TeachState {
+/**
+ * userId: the signed-in caller, passed only when accounts are on. A token sealed for another account is refused;
+ * a token sealed before accounts (no userId) stays valid and is bound to this caller from its next seal on.
+ */
+export function openTeachState(token: string, topicId: string, documents: TeachTurnRequest['documents'], userId?: string): TeachState {
+  let state: TeachState;
   try {
     const bytes = Buffer.from(token, 'base64url');
     const decipher = createDecipheriv('aes-256-gcm', stateKey(), bytes.subarray(0, 12));
     decipher.setAuthTag(bytes.subarray(12, 28));
-    const state = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8')) as TeachState;
+    state = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8')) as TeachState;
     if (state.version !== 1 || state.topicId !== topicId || state.scope !== scopeFor(documents) || !Array.isArray(state.rubric) || !Array.isArray(state.transcript)) throw new Error('State mismatch');
-    return state;
   } catch { throw new ApiError(409, 'This topic state no longer matches its notes. Your local notes are still saved; start a new topic.', 'STATE_MISMATCH'); }
+  if (!userId) return state;
+  if (state.userId && state.userId !== userId) throw new ApiError(403, 'This topic belongs to a different account. Sign in with the account that started it.', 'WRONG_ACCOUNT');
+  return state.userId ? state : { ...state, userId };
 }
 function progress(state: TeachState) {
   const total = state.rubric.length;
@@ -248,7 +257,7 @@ function briefInput(state: TeachState, sources: SourceSpan[], transcript: Messag
 const liveStep5 = (state: TeachState, model: string) => !state.sample && model === 'step-5-preview';
 // Without notes there is nothing to cite; the Judge grades from its own knowledge.
 const sourcesOf = (documents: CreateTopicRequest['documents']) => documents.length ? validateSources(documents) : [];
-export async function createTeachTopic(request: CreateTopicRequest, provider: TeachProvider): Promise<TeachResponse> {
+export async function createTeachTopic(request: CreateTopicRequest, provider: TeachProvider, userId?: string): Promise<TeachResponse> {
   const sources = sourcesOf(request.documents);
   if (request.mode === 'demo' && !request.sampleId) throw new ApiError(400, 'Choose a bundled sample for a sample session.', 'DEMO_ONLY');
   const planning = planSources(sources);
@@ -266,7 +275,8 @@ export async function createTeachTopic(request: CreateTopicRequest, provider: Te
   const topicId = randomUUID();
   const state: TeachState = { version: 1, topicId, scope: scopeFor(request.documents), title: request.title, depth: request.depth,
     sample: request.mode === 'demo', sampleId: request.sampleId, mode: 'teach', rubric, coreIdeas: draft.coreIdeas,
-    credited: {}, revoked: [], transcript: [], pastProblems: [], styles: [], quizTurn: 0, revision: 0, pendingJudge: [], pendingBrief: false, lastFocus: null };
+    credited: {}, revoked: [], transcript: [], pastProblems: [], styles: [], quizTurn: 0, revision: 0, pendingJudge: [], pendingBrief: false, lastFocus: null,
+    ...(userId ? { userId } : {}) };
   return { topicId, stateToken: seal(state), progress: progress(state),
     message: { id: randomUUID(), role: 'assistant', text: 'Hi! I’m Stu. Teach me this topic in your own words. What should I know first?' },
     liveStep5: false };
@@ -276,9 +286,9 @@ export async function createTeachTopic(request: CreateTopicRequest, provider: Te
  * afterwards through runJudgeTurn, so the reply never waits on the slower model. In re-learn mode the
  * reply depends on a checked brief, so the brief (Step 5) and Stu run in sequence.
  */
-export async function runTeachTurn(request: TeachTurnRequest, provider: TeachProvider, _debugEnabled = false): Promise<TeachResponse> {
+export async function runTeachTurn(request: TeachTurnRequest, provider: TeachProvider, _debugEnabled = false, userId?: string): Promise<TeachResponse> {
   const sources = sourcesOf(request.documents);
-  const state = openTeachState(request.stateToken, request.topicId, request.documents);
+  const state = openTeachState(request.stateToken, request.topicId, request.documents, userId);
   if (request.revision <= state.revision) throw new ApiError(409, 'A newer message already changed this topic. Reload your saved session.', 'STALE_TURN');
   if (state.transcript.some(m => m.id === request.messageId || m.id === request.turnId)) throw new ApiError(409, 'This message has already been used. Retry with your latest saved session.', 'STALE_TURN');
   const user: Message = { id: request.messageId, role: 'user', text: request.text };
@@ -307,9 +317,9 @@ async function relearnReply(state: TeachState, transcript: Message[], sources: S
     message: { ...assistant, sourceIds: brief.sourceIds }, liveStep5: liveStep5(state, briefCall.model) };
 }
 /** Grade every teacher message Stu has already answered, then (on completion) write Stu's teach-back. */
-export async function runJudgeTurn(request: JudgeTurnRequest, provider: TeachProvider, debugEnabled = false): Promise<TeachResponse> {
+export async function runJudgeTurn(request: JudgeTurnRequest, provider: TeachProvider, debugEnabled = false, userId?: string): Promise<TeachResponse> {
   const sources = sourcesOf(request.documents);
-  const state = openTeachState(request.stateToken, request.topicId, request.documents);
+  const state = openTeachState(request.stateToken, request.topicId, request.documents, userId);
   if (state.pendingBrief) return startRelearn(state, sources, provider);
   const transcript = state.transcript;
   const pending = (state.pendingJudge ?? []).filter(id => transcript.some(m => m.id === id && m.role === 'user'));

@@ -91,7 +91,8 @@ flowchart LR
 - **Credits require your own words.** A quote the model invents or rewords fails the server's check, as does "yes, exactly". A later contradiction takes credit back.
 - **The Feynman loop beside the board is driven only by what you do** (writing, sending, waiting for Stu), never by the hidden grading.
 - **Sample sessions are labeled *Sample demo*** and use fixed responses, not a model.
-- **No training.** Stu doesn't permanently learn from you. Notes and conversations stay in your browser (IndexedDB), and the rubric lives in an encrypted (AES-GCM) state token that the browser can't read.
+- **No training.** Stu doesn't permanently learn from you. The rubric lives in an encrypted (AES-GCM) state token that the browser can't read.
+- **Your notes stay yours.** Without accounts, notes and conversations stay in your browser (IndexedDB). With [accounts](docs/ACCOUNTS.md) on, they're saved to your own row and private file folder in Supabase, which row-level security limits to your account, and cached in the browser until you sign out. A topic's state token is bound to the account that started it, and **Delete my data** erases your topics and files.
 
 ## Run it locally
 
@@ -104,6 +105,8 @@ npm run dev            # http://127.0.0.1:5173 (API on :3001)
 ```
 
 Without a key, **Try a sample session** still works end to end.
+
+Accounts are off unless `SUPABASE_URL` and `SUPABASE_ANON_KEY` are both set. With them, everything past the front page needs Google sign-in and topics are saved to the account; the Supabase setup is in [docs/ACCOUNTS.md](docs/ACCOUNTS.md).
 
 | Command | What it does |
 | --- | --- |
@@ -121,6 +124,8 @@ Vercel Hobby serves the Vite frontend and runs the Express API as one same-origi
 | --- | --- |
 | `STEPFUN_API_KEY` | Required. Used by the Judge, Stu, and voice |
 | `SESSION_SECRET` | Required. A long random value; keep it stable so saved sessions stay readable |
+| `SUPABASE_URL` | Optional. `https://<ref>.supabase.co`. With `SUPABASE_ANON_KEY`, turns on Google sign-in and saved topics ([docs/ACCOUNTS.md](docs/ACCOUNTS.md)); set both or neither |
+| `SUPABASE_ANON_KEY` | Optional. The project's public anon (publishable) key. Never the service-role key |
 | `ENABLE_JUDGE_DEBUG` | Optional. `true` adds a **Show Judge Evidence** setting |
 | `STEPFUN_{RUBRIC,JUDGE,BRIEF,STU}_REASONING_EFFORT` | Optional. Default `low` |
 | `STEPFUN_{RUBRIC,JUDGE,BRIEF,STU}_TIMEOUT_MS` | Optional. Defaults 150 / 150 / 60 / 35 s |
@@ -132,22 +137,24 @@ DNS for `brodidnot.study` is in [docs/DOMAIN.md](docs/DOMAIN.md).
 
 Up to 5 files per topic, 20 MB and 100 pages per PDF, and 300,000 extracted characters in total. Recordings are capped at 3 minutes. Scanned PDFs need OCR, which isn't supported yet, so paste their text instead. Long notes are sampled evenly per page when the plan is built. The Judge still reads the full passages it needs.
 
+With accounts on, each topic is one row in `public.study_sessions` (the session and extracted text) plus its original files in the private `notes` bucket (20 MB per file, PDF or plain text), up to 200 topics per account. Rows are versioned, so a tab or device open on an older state can't overwrite newer teaching. The API server itself still stores nothing: the browser saves to Supabase with the signed-in user's token. **Delete my data** removes topics and files but not the sign-in record, which the project owner can delete in Supabase.
+
 ## Project layout
 
 | Folder | What's in it |
 | --- | --- |
 | [`web/`](web) | The site: React app (`web/src`), static files (`web/public`), `index.html`, Vite config |
-| [`server/`](server) | The Express API: the Judge, Stu, state sealing, voice |
+| [`server/`](server) | The Express API: the Judge, Stu, state sealing, voice, account checks; [`server/supabase/schema.sql`](server/supabase/schema.sql) for accounts |
 | [`api/`](api) | The Vercel function that serves `server/` |
 | [`shared/`](shared) | Types used by both the site and the server |
 | [`tests/`](tests) | Playwright tests, their config, and the live on-topic eval in [`tests/evals`](tests/evals/stu-on-topic) |
-| [`docs/`](docs) | Decisions, domain setup, screenshots, the original build handoff |
+| [`docs/`](docs) | Decisions, domain and accounts setup, screenshots, the original build handoff |
 
 Unit tests sit next to the code they test (`server/*.test.ts`, `web/src/lib/*.test.ts`).
 
 ## Under the hood
 
-Vite + React 19 · Express · Zod · pdf.js · strict TypeScript · `node:test` · Playwright. State and evidence rules are in [server/README.md](server/README.md), and every architectural decision is in [docs/DECISIONS.md](docs/DECISIONS.md). Contributors start with [AGENTS.md](AGENTS.md).
+Vite + React 19 · Express · Zod · pdf.js · Supabase Auth and Postgres (optional accounts) · strict TypeScript · `node:test` · Playwright. State and evidence rules are in [server/README.md](server/README.md), and every architectural decision is in [docs/DECISIONS.md](docs/DECISIONS.md). Contributors start with [AGENTS.md](AGENTS.md).
 
 ## Team
 

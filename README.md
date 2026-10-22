@@ -15,7 +15,7 @@ The Feynman technique, with a student who really needs you. Stu is cheerful, cur
 ![React 19](https://img.shields.io/badge/React-19-61dafb)
 ![Hosted on Vercel](https://img.shields.io/badge/hosted%20on-Vercel-000)
 
-<img src="docs/screenshots/lesson-board.png" alt="The Teach Stu lesson board: your explanations written as numbered lines, Stu's questions as sticky notes, Stu at his desk, and the Feynman loop beside them" width="860" />
+<img src="docs/screenshots/lesson-board.png" alt="The Teach Stu lesson board: your numbered explanations on the right, Stu's questions as sticky notes on the left, Stu at his desk, and the Feynman loop beside them" width="860" />
 
 </div>
 

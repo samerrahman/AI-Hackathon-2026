@@ -41,6 +41,8 @@ export class TopicConflict extends Error {
 }
 /** The topic's rows are deleted, but some of its notes are still in storage. */
 export class NotesLeftBehind extends Error {}
+/** The topic belongs to another account than the one signed in now: it is never saved, and never retried. */
+export class WrongAccount extends Error {}
 
 async function signedIn(): Promise<{ supabase: SupabaseClient; uid: string }> {
   const supabase = supabaseClient();
@@ -83,6 +85,8 @@ export interface SaveResult { summary: TopicSummary; meta: CloudMeta; uploadFail
  */
 export async function saveTopic(session: CloudSession, known?: CloudMeta, ownWrites: readonly number[] = []): Promise<SaveResult> {
   const { supabase, uid } = await signedIn();
+  // The account comes from storage on every call, so another tab's sign-in can change it under a pending save.
+  if (session.ownerId !== uid) throw new WrongAccount();
   const present = new Set(session.documents.map(doc => doc.id));
   const uploaded = (known?.uploaded ?? []).filter(id => present.has(id));
   const summary: TopicSummary = { id: session.id, name: session.name, depth: session.depth, mode: session.mode, status: session.status, percent: percentOf(session), updated_at: new Date(session.updatedAt).toISOString() };
@@ -239,6 +243,8 @@ export function createCloudSaver(options: { onState: (state: SaveState) => void;
   let saving = 0;
   let chain: Promise<void> = Promise.resolve();
   let failures = 0;
+  // Bumped by cancel(): a batch already in flight when the account changes must not record, report or re-queue.
+  let epoch = 0;
   const report = () => options.onState(failures && pending.size ? 'failed' : pending.size || saving ? 'saving' : 'saved');
   const remember = (id: string, next: CloudMeta) => {
     const known = meta.get(id);
@@ -257,6 +263,7 @@ export function createCloudSaver(options: { onState: (state: SaveState) => void;
     chain = chain.then(async () => {
       const batch = [...pending.values()]; pending.clear();
       if (!batch.length) return;
+      const mine = epoch;
       saving++;
       let failed = false;
       try {
@@ -264,12 +271,15 @@ export function createCloudSaver(options: { onState: (state: SaveState) => void;
           if (deleted.has(session.id) || stale.has(session.id)) continue;
           try {
             const result = await saveTopic(session, meta.get(session.id), ownWrites.get(session.id));
+            if (mine !== epoch) continue;
             ownWrites.delete(session.id);
             remember(session.id, result.meta);
             if (deleted.has(session.id)) continue;
             options.onSaved?.(result.summary, meta.get(session.id) ?? result.meta);
             if (result.uploadFailed) { failed = true; if (!pending.has(session.id)) pending.set(session.id, session); }
           } catch (cause) {
+            if (mine !== epoch) continue;
+            if (cause instanceof WrongAccount) { pending.delete(session.id); continue; }
             if (cause instanceof TopicConflict) {
               (cause.kind === 'gone' ? deleted : stale).add(session.id); pending.delete(session.id);
               options.onConflict?.(cause);
@@ -282,6 +292,7 @@ export function createCloudSaver(options: { onState: (state: SaveState) => void;
           }
         }
       } finally { saving--; }
+      if (mine !== epoch) return;
       if (failed) { failures++; if (pending.size) arm(Math.min(30_000, 2_000 * 2 ** (failures - 1))); }
       else failures = 0;
       report();
@@ -318,7 +329,7 @@ export function createCloudSaver(options: { onState: (state: SaveState) => void;
     /** The delete failed: the topic is still there, so it may be saved again. */
     undrop(id: string) { deleted.delete(id); },
     /** Forgets everything waiting and known (signing out, deleting all data). */
-    cancel() { clearTimeout(timer); timer = undefined; pending.clear(); meta.clear(); ownWrites.clear(); stale.clear(); failures = 0; },
+    cancel() { epoch++; clearTimeout(timer); timer = undefined; pending.clear(); meta.clear(); ownWrites.clear(); stale.clear(); failures = 0; },
   };
 }
 export type CloudSaver = ReturnType<typeof createCloudSaver>;

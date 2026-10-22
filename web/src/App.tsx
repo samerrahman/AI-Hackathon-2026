@@ -399,6 +399,8 @@ export default function App() {
     await saveQueue.current; await deleteSession().catch(() => {}); await clearPendingStart().catch(() => {});
     focusSignIn.current = true;
     await auth.signOut();
+    // Another tab may have rewritten this browser's copy during the sign-out round trip.
+    await saveQueue.current; await deleteSession().catch(() => {});
   }
   async function removeTopic(topic: TopicSummary) {
     setAccountBusy(true);

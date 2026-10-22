@@ -53,7 +53,7 @@ export class DemoTeachProvider implements TeachProvider {
     const names = ideas[this.sampleId].map(idea => idea[1]);
     return sampleResult({ teacherQuote: input.verifiedTeacherQuotes[0] ?? '', accurateSummary: `You explained ${names.join(', ')} in your own words.`,
       correction: input.pastProblems.some(problem => problem.type === 'wrong') ? 'One earlier claim needed correcting; the notes show the accurate version.' : '',
-      quizFeedback: input.transition ? '' : 'Thanks, that answer uses the key idea.', quizQuestion: `How would you apply ${names[0]} to a new example?`,
+      quizFeedback: input.transition ? '' : 'Thanks, that answer uses the key idea.', quizQuestion: `How would you apply ${names[input.quizTurn % names.length]} to a new example?`,
       sourceIds: input.sources.length ? [input.sources[0].id] : [] });
   }
   async stu(input: StuInput): Promise<ModelResult<StuResult>> {
@@ -62,8 +62,10 @@ export class DemoTeachProvider implements TeachProvider {
     const index = input.transcript.length % styles.length;
     const questionStyle = styles[index] === input.lastQuestionStyle ? styles[(index + 1) % styles.length] : styles[index];
     if (input.mode === 'relearn') {
-      const brief = (input.director as { brief: { teacherQuote: string; accurateSummary: string; quizQuestion: string } }).brief;
-      return sampleResult({ text: `You taught me using “${clip(brief.teacherQuote, 70)}”. ${brief.accurateSummary} ${brief.quizQuestion}`, questionStyle });
+      const { brief, transition } = input.director as { brief: { teacherQuote: string; accurateSummary: string; quizFeedback: string; quizQuestion: string }; transition?: boolean };
+      // The full teach-back once; after that, feedback on the answer and the next quiz question.
+      const text = transition ? `You taught me using “${clip(brief.teacherQuote, 70)}”. ${brief.accurateSummary} ${brief.quizQuestion}` : `${brief.quizFeedback} ${brief.quizQuestion}`.trim();
+      return sampleResult({ text, questionStyle });
     }
     const director = input.director as { focus: { anchorQuote: string } };
     const asks = {

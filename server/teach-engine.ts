@@ -5,7 +5,7 @@ import { validateSources, requireReferences } from './engine.js';
 import { scopeFor, stateKey } from './state.js';
 import { ApiError } from './schema.js';
 import { rubricSchema, judgeSchema, relearnBriefSchema, stuSchema, type CreateTopicRequest, type Depth, type Focus, type JudgeResult, type JudgeTurnRequest, type RelearnBrief, type TeachMode, type TeachTurnRequest } from './teach-schema.js';
-import type { BriefInput, TeachProvider, StuInput } from './teach-provider.js';
+import type { BriefInput, Lesson, TeachProvider, StuInput } from './teach-provider.js';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string };
 type Evidence = { rubricItemId: string; teacherMessageId: string; quote: string };
@@ -97,11 +97,36 @@ function validatedAnchor(anchor: { teacherMessageId: string; anchorQuote: string
 function genericFocus(latest: Message): Focus {
   return { type: 'vague', teacherMessageId: latest.id, anchorQuote: latest.text.slice(0, 160), instruction: 'ask_clarify' };
 }
-const focusInstruction: Record<string, Focus['instruction']> = { wrong: 'ask_why', vague: 'ask_clarify', missing_step: 'ask_order', undefined_term: 'ask_define', off_topic: 'ask_clarify' };
+// Asking what an off-topic phrase means only pulled Stu further into the tangent; he now steers back to the lesson.
+const focusInstruction: Record<string, Focus['instruction']> = { wrong: 'ask_check', vague: 'ask_clarify', missing_step: 'ask_order', undefined_term: 'ask_define', off_topic: 'steer_back' };
 // The Judge no longer writes Stu's question; the first verified problem becomes a teacher-quoted nudge for the next reply.
 function focusFromProblems(problems: JudgeResult['problems']): Focus | null {
   const problem = problems[0];
   return problem ? { type: problem.type, teacherMessageId: problem.teacherMessageId, anchorQuote: problem.quote.slice(0, 160), instruction: focusInstruction[problem.type] ?? 'ask_clarify' } : null;
+}
+// Words that say what a message is about: lowercase, at least four letters, not filler, crudely stemmed.
+const FILLER = new Set('that this with from they them their there then than what when where which while into about also just like your youre have were been being does doing done more most some such very much many each other only over under because would could should will cant dont isnt thats basically really actually kind sort thing things stuff yeah okay right'.split(' '));
+function terms(text: string): Set<string> {
+  return new Set((text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || []).filter(word => !FILLER.has(word)).map(word => word.replace(/(ings|ing|ies|ied|es|ed|ly|s)$/, '')));
+}
+/**
+ * The idea Stu should be trying to learn next: the unfinished idea the teacher is talking about if their
+ * last message clearly is about one, otherwise the first idea whose gist has not been taught yet, then the
+ * first unfinished one. Matching uses each idea's label, requirements and cited note text on the server only.
+ */
+export function lessonFor(state: TeachState, sources: SourceSpan[], latest: string): Lesson {
+  const credited = new Set(Object.keys(state.credited));
+  const spans = new Map(sources.map(span => [span.id, span.text]));
+  const ideas = state.coreIdeas.map((label, index) => {
+    const items = state.rubric.filter(item => item.ideaIndex === index);
+    const vocabulary = terms([label, ...items.map(item => item.requirement), ...items.flatMap(item => item.sourceIds.map(id => spans.get(id) ?? ''))].join(' '));
+    return { label, done: items.every(item => credited.has(item.id)), covered: items.some(item => item.stage === 'cover' && credited.has(item.id)), vocabulary };
+  });
+  const said = terms(latest);
+  const talkingAbout = ideas.map(idea => ({ idea, overlap: [...said].filter(word => idea.vocabulary.has(word)).length }))
+    .filter(entry => !entry.idea.done && entry.overlap >= 2).sort((a, b) => b.overlap - a.overlap)[0]?.idea;
+  const current = talkingAbout ?? ideas.find(idea => !idea.covered) ?? ideas.find(idea => !idea.done) ?? ideas[0];
+  return { title: state.title, ideas: state.coreIdeas, current: current?.label ?? state.title };
 }
 function safeProblems(problems: JudgeResult['problems'], all: SourceSpan[]) {
   const validIds = new Set(all.map(s => s.id));
@@ -111,35 +136,79 @@ const problemDescriptions: Record<string, string> = {
   wrong: 'A factual claim needs correction.', vague: 'The explanation needs a more specific statement.',
   missing_step: 'A reasoning step is missing.', undefined_term: 'A term needs defining.', off_topic: 'The explanation moved away from the topic.',
 };
+// Hard limits reject a reply outright: no question at all, or a wall of text. The live eval showed both
+// samples often ran just past the old 450-character cap, failing about one turn in fifteen, so the tighter
+// shape (450 characters, four sentences, two question marks) is now only preferred; see stuReply.
 function validateStuText(text: string, mode: TeachMode) {
   const questions = (text.match(/\?/g) || []).length;
-  const limit = mode === 'teach' ? 450 : 900;
+  const limit = mode === 'teach' ? 700 : 1200;
   // Details are counts only, never Stu's text.
-  // One real question, plus at most one tag such as "…, right?" on a restatement.
-  if (questions < 1 || questions > 2 || text.length > limit) throw new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: ${questions} question marks, ${text.length}/${limit} characters`);
+  if (questions < 1 || text.length > limit) throw new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: ${questions} question marks, ${text.length}/${limit} characters`);
+}
+/** Ways a valid reply misses Stu's ideal shape; fewer is better. */
+function stuShapeMisses(text: string, mode: TeachMode): number {
+  // A tag on a restatement ("…, right?") is not a second question.
+  const questions = (text.replace(/,?\s*(right|correct|yeah|huh|yes|no)\?/gi, '.').match(/\?/g) || []).length;
   const sentences = text.split(/[.!?]+/).filter(part => part.trim()).length;
-  if (mode === 'teach' && sentences > 4) throw new ApiError(502, 'Stu returned an overlong response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: ${sentences} sentences`);
+  return Number(questions > 1) + Number(text.length > (mode === 'teach' ? 450 : 900)) + Number(mode === 'teach' && sentences > 4);
 }
 // Step 5 and Stu vary a lot from run to run in thinking time, and now and then a sample runs away or
 // returns an empty answer. Two samples run in parallel and the first that passes validation wins; the
 // slower one is ignored. Provider, auth, balance and timeout failures are surfaced; broken output is not.
-async function firstValid<T>(attempt: () => Promise<T>, fallback: () => ApiError): Promise<T> {
+// With \`misses\`, a valid sample that misses the ideal (score above 0) is held back while the other sample
+// runs, and the held sample with the lowest score is used only if no ideal one arrives, so a preference can
+// cost a few seconds but never an error.
+async function firstValid<T>(attempt: () => Promise<T>, fallback: () => ApiError, misses?: (value: T) => number): Promise<T> {
+  const samples = [attempt(), attempt()];
   try {
-    return await Promise.any([attempt(), attempt()]);
+    if (!misses) return await Promise.any(samples);
+    const held: { value: T; score: number }[] = [];
+    try {
+      return await Promise.any(samples.map(sample => sample.then(value => { const score = misses(value); if (!score) return value; held.push({ value, score }); throw new Error('not ideal'); })));
+    } catch (error) {
+      if (held.length) return held.sort((a, b) => a.score - b.score)[0].value;
+      throw error;
+    }
   } catch (error) {
     const errors: unknown[] = error instanceof AggregateError ? error.errors : [error];
     const retryable = (cause: unknown) => cause instanceof z.ZodError || (cause instanceof ApiError && (cause.code === 'INVALID_MODEL_OUTPUT' || cause.code === 'INVALID_SOURCE'));
     throw errors.find(cause => !retryable(cause)) ?? errors.find(cause => cause instanceof ApiError) ?? fallback();
   }
 }
-function stuReply(provider: TeachProvider, input: StuInput) {
+// Everyday words a confused student uses about anything; they never make a question a tangent.
+const STU_WORDS = new Set(('wait okay sorry confus understand mean explain part work happen different same example idea lesson little lost think thought said say tell know again simple still need something someone another always never every less exact help start first next step whole make sense sure really point bit gues follow get got going come came turn turns keep used use much way ways time times kind talk talking part parts word words thing mix mixed wrong correct true happen happens actual basical whole question answer back main single before around through during inside outside people little should enough without between together important anything everything nothing problem number process change total simpl probabl definit').split(' '));
+/**
+ * Words in Stu's question that appear nowhere in the lesson: not in the notes, the rubric, the idea names, the
+ * title, or anything the teacher said. Two or more mean Stu brought in a new subject of his own (the live
+ * failure was "what do they use for energy at nighttime?" in a photosynthesis lesson with no night in it).
+ */
+export function tangentWords(reply: string, lessonText: string): string[] {
+  const question = reply.split(/(?<=[.!?])\s+/).filter(sentence => sentence.includes('?')).join(' ') || reply;
+  const allowed = terms(lessonText);
+  // Short words are mostly everyday verbs and connectives ("grab", "after"); subjects are longer ("nighttime", "respiration").
+  return [...terms(question)].filter(word => word.length >= 6 && !allowed.has(word) && ![...STU_WORDS].some(common => word.startsWith(common)));
+}
+const topicGuard = () => process.env.STU_TOPIC_GUARD !== 'off';
+// When both samples fail (cut off while thinking, or no question) and there is time left, one more pair runs:
+// a few extra seconds in a rare case instead of an error in the chat.
+async function stuReply(provider: TeachProvider, input: StuInput, lessonText?: string) {
+  const started = performance.now();
+  try { return await stuPair(provider, input, lessonText); }
+  catch (error) {
+    if (!(error instanceof ApiError && error.code === 'INVALID_MODEL_OUTPUT') || performance.now() - started > 20_000) throw error;
+    return stuPair(provider, input, lessonText);
+  }
+}
+function stuPair(provider: TeachProvider, input: StuInput, lessonText?: string) {
   return firstValid(async () => {
     const stuCall = await provider.stu(input);
     const stu = stuSchema.parse(stuCall.data);
     validateStuText(stu.text, input.mode);
     if (input.lastQuestionStyle === stu.questionStyle) throw new ApiError(502, 'Stu repeated a question style. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT', `stu: repeated ${stu.questionStyle} style`);
     return { stuCall, stu };
-  }, () => new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT'));
+  }, () => new ApiError(502, 'Stu returned an incomplete response. Your message is safe; retry.', 'INVALID_MODEL_OUTPUT'),
+  // A drifting question counts more than a long one: staying on the lesson matters most.
+  ({ stu }) => stuShapeMisses(stu.text, input.mode) + (lessonText !== undefined && topicGuard() && tangentWords(stu.text, lessonText).length >= 2 ? 2 : 0));
 }
 // Long notes are sampled evenly for the planner: each page keeps its headings and then its text in reading
 // order up to an equal share, so a 100-page PDF plans about as fast as a handout. Ids are unchanged, so
@@ -216,9 +285,11 @@ export async function runTeachTurn(request: TeachTurnRequest, provider: TeachPro
   const transcript = [...state.transcript, user];
   if (state.mode === 'relearn') return relearnReply(state, transcript, sources, provider, request.revision);
   const focus = state.lastFocus && validatedAnchor(state.lastFocus, transcript) ? state.lastFocus : genericFocus(user);
-  const { stu } = await stuReply(provider, { depth: state.depth, mode: 'teach', transcript: transcript.slice(-20),
+  const lessonText = [state.title, ...state.coreIdeas, ...state.rubric.map(item => item.requirement), ...sources.map(span => span.text),
+    ...transcript.filter(message => message.role === 'user').map(message => message.text)].join(' ');
+  const { stu } = await stuReply(provider, { depth: state.depth, mode: 'teach', transcript: transcript.slice(-20), lesson: lessonFor(state, sources, user.text),
     director: { focus: { type: focus.type, teacherMessageId: focus.teacherMessageId, anchorQuote: focus.anchorQuote, instruction: focus.instruction }, mistake: null },
-    lastQuestionStyle: state.styles.at(-1) });
+    lastQuestionStyle: state.styles.at(-1) }, lessonText);
   const assistant: Message = { id: randomUUID(), role: 'assistant', text: stu.text };
   const proposed: TeachState = { ...state, transcript: [...transcript, assistant].slice(-60), pendingJudge: [...(state.pendingJudge ?? []), user.id],
     lastFocus: null, styles: [...state.styles, stu.questionStyle], revision: request.revision };

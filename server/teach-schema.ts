@@ -15,7 +15,8 @@ const evidenceSchema = z.object({ rubricItemId: id, teacherMessageId: id, quote:
 const anchoredSchema = z.object({ teacherMessageId: id, anchorQuote: z.string().min(1).max(500) });
 export const focusSchema = anchoredSchema.extend({
   type: problemTypeSchema,
-  instruction: z.enum(['ask_clarify', 'ask_why', 'ask_define', 'ask_boundary', 'ask_contrast', 'ask_example', 'ask_order', 'ask_analogy']),
+  // ask_check: Stu doubts a claim the Judge found wrong; steer_back: their message left the lesson.
+  instruction: z.enum(['ask_clarify', 'ask_why', 'ask_define', 'ask_boundary', 'ask_contrast', 'ask_example', 'ask_order', 'ask_analogy', 'ask_check', 'steer_back']),
 });
 export const mistakeSchema = anchoredSchema.extend({ restatement: z.string().min(5).max(300) });
 export const relearnBriefSchema = z.object({

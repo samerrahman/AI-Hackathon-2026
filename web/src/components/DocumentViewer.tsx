@@ -15,9 +15,13 @@ export interface DocumentViewerProps {
   onSelection: (selection: SelectionContext | null) => void;
   /** When supplied, the parent owns the selection strip and clearing behavior. */
   selection?: SelectionContext | null;
+  /** What to say when a PDF's original is missing (signed in: it didn't download from the account). */
+  missingText?: string;
+  /** Fetches a missing original again; the Retry button calls it while the PDF is missing. */
+  onReloadMissing?: () => void;
 }
 
-export function DocumentViewer({ documents, documentId, pageIndex, onNavigate, highlightIds, onSelection, selection: controlledSelection }: DocumentViewerProps) {
+export function DocumentViewer({ documents, documentId, pageIndex, onNavigate, highlightIds, onSelection, selection: controlledSelection, missingText, onReloadMissing }: DocumentViewerProps) {
   const current = documents.find(document => document.id === documentId) ?? documents[0];
   const safePage = Math.max(0, Math.min(pageIndex, (current?.pageCount ?? 1) - 1));
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
@@ -70,7 +74,7 @@ export function DocumentViewer({ documents, documentId, pageIndex, onNavigate, h
     setPdf(null);
     setError('');
     if (!current || current.kind !== 'pdf') { setBusy(false); return; }
-    if (!current.blob) { setError('The original PDF is missing from this browser. Upload it again to view its pages.'); return; }
+    if (!current.blob) { setError(missingText ?? 'The original PDF is missing from this browser. Upload it again to view its pages.'); return; }
     let disposed = false;
     let loading: ReturnType<typeof getDocument> | undefined;
     setBusy(true);
@@ -84,7 +88,7 @@ export function DocumentViewer({ documents, documentId, pageIndex, onNavigate, h
       render.current?.cancel();
       if (loading) void loading.destroy();
     };
-  }, [current?.id, current?.blob, current?.kind, retry]);
+  }, [current?.id, current?.blob, current?.kind, retry, missingText]);
 
   useEffect(() => {
     if (!pdf) return;
@@ -207,7 +211,7 @@ export function DocumentViewer({ documents, documentId, pageIndex, onNavigate, h
     {selection && controlledSelection === undefined && <div className="selection-context" role="status"><ScanLine size={15} /><span><strong>Passage selected</strong> · {selection.text.length} characters. “Explain this part” will use this passage.</span><button aria-label="Clear selected passage" onClick={clearSelection}><X size={15} /></button></div>}
     <div className="document-scroll" ref={scroller}>
       {current.warnings.filter(warning => warning.startsWith(`Page ${safePage + 1}:`)).map(warning => <p className="document-warning" key={warning}>{warning}</p>)}
-      {error && <div className="document-error" role="alert"><p>{error}</p><button onClick={() => setRetry(value => value + 1)}>Retry page</button></div>}
+      {error && <div className="document-error" role="alert"><p>{error}</p><button onClick={() => { if (current?.kind === 'pdf' && !current.blob && onReloadMissing) onReloadMissing(); else setRetry(value => value + 1); }}>{current?.kind === 'pdf' && !current.blob && onReloadMissing ? 'Try again' : 'Retry page'}</button></div>}
       {busy && current.kind === 'pdf' && <span className="page-loading" role="status">Opening page {safePage + 1}…</span>}
       <div className={`document-paper ${current.kind === 'text' ? 'document-text-paper' : ''}`} ref={surface} style={current.kind === 'pdf' ? { width: displayWidth, height: displayHeight } : { width: `${zoom * 100}%`, maxWidth: `${850 * zoom}px`, fontSize: `${16 * zoom}px` }} onPointerUp={captureSelection} onKeyUp={captureSelection}>
         {current.kind === 'pdf' ? <>

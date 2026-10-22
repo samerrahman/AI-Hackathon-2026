@@ -5,4 +5,5 @@ import '@fontsource-variable/dm-sans';
 import '@fontsource/libre-caslon-display';
 import './styles.css';
 import './landing.css';
+import './account.css';
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);

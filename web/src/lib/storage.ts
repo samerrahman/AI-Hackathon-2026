@@ -4,6 +4,8 @@ import { clear, createStore, del, get, set } from 'idb-keyval';
 const sessionStore = createStore('miso-local-v1', 'session');
 const documentStore = createStore('miso-documents-v1', 'documents');
 const sessionKey = 'current-session';
+/** The start card's title, depth and notes while the browser goes to Google to sign in again. */
+const pendingStartKey = 'pending-start';
 
 export async function saveSession<T>(session: T): Promise<void> {
   await set(sessionKey, session, sessionStore);
@@ -17,6 +19,21 @@ export async function loadSession<T>(): Promise<T | undefined> {
 export async function deleteSession(): Promise<void> {
   await del(sessionKey, sessionStore);
   await clear(documentStore);
+}
+
+export async function savePendingStart<T>(value: T): Promise<void> {
+  await set(pendingStartKey, value, sessionStore);
+}
+
+/** Reads and removes what savePendingStart kept. */
+export async function takePendingStart<T>(): Promise<T | undefined> {
+  const value = await get<T>(pendingStartKey, sessionStore);
+  if (value !== undefined) await del(pendingStartKey, sessionStore);
+  return value;
+}
+
+export async function clearPendingStart(): Promise<void> {
+  await del(pendingStartKey, sessionStore);
 }
 
 export async function readDocumentCache<T>(key: string): Promise<T | undefined> {

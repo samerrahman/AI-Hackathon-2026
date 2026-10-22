@@ -98,4 +98,6 @@ export interface AppConfig {
   provider: 'Step 5 Preview';
   judgeDebugAvailable?: boolean;
   limits: { maxFiles: number; maxFileBytes: number; maxPages: number; maxTextCharacters: number };
+  /** Supabase project URL and public anon key when accounts are on; null (or absent) when they are off. */
+  auth?: { url: string; anonKey: string } | null;
 }

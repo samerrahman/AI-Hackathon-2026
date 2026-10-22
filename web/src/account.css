@@ -1,0 +1,100 @@
+/* ===== Accounts: Google sign-in panel and dialog, the nav's account menu, and My topics (landing palette) ===== */
+
+/* Continue with Google: Google's dark button theme (fill #131314, the standard colored G) */
+.google-button{display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:50px;min-width:260px;max-width:100%;padding:0 24px 0 14px;border:1px solid #8e918f;border-radius:999px;background:#131314;color:#e3e3e3;font-size:16px;font-weight:600;letter-spacing:.1px;line-height:1.2;box-shadow:0 2px 0 #00000026,0 12px 22px -14px #13131499}
+.google-button:hover:not(:disabled){background:#2a2a2c}
+.google-button:active:not(:disabled){transform:translateY(1px)}
+.google-button:disabled{opacity:.7}
+.google-mark{display:grid;place-items:center;width:24px;height:24px;flex-shrink:0}
+.signin-notice{margin:0 0 10px;padding:6px 12px;border-radius:999px;background:#eef6ee;color:#2f5e35;font-size:13.5px;font-weight:600}
+.start-unavailable{display:flex;flex-direction:column;align-items:flex-start;gap:12px;margin:16px 22px 18px;padding:18px;border:1px dashed #e7c3ad;border-radius:14px;background:#fffaf3}
+.start-unavailable p{margin:0;font-size:15px;line-height:1.55;color:var(--lp-body,#5b4a42)}
+.lp-honest-grid li[data-pending]{visibility:hidden}
+.signin-error{margin:12px 0 0;font-size:13.5px;line-height:1.5;color:#a33b2b}
+
+/* The start card while signed out */
+.signin-panel{margin:16px 22px 18px;padding:18px 18px 14px;display:flex;flex-direction:column;align-items:center;text-align:center;border:1px dashed #e7c3ad;border-radius:14px;background:#fffaf3}
+.signin-stu{display:block;width:76px;height:76px;margin:0 0 8px}
+.signin-line{max-width:25em;margin:0 0 18px;font-size:15.5px;line-height:1.55;color:var(--lp-body,#5b4a42)}
+.landing .signin-panel .start-talking{margin-top:12px}
+.signin-description{font-size:15px!important;line-height:1.6;color:#5b4a42!important}
+.signin-dialog{display:flex;flex-direction:column;align-items:flex-start;margin:4px 0 16px}
+.modal .subtle-note{font-size:13px;line-height:1.6}
+
+/* While the config and stored sign-in are checked: quiet blocks the shape of the form */
+.start-skeleton{display:grid;gap:10px;padding:20px 22px 22px}
+.start-skeleton i{display:block;height:14px;width:34%;border-radius:7px;background:#f3e6da}
+.start-skeleton i:nth-child(3){height:48px;width:100%;border-radius:11px;margin-bottom:6px}
+.start-skeleton i.is-box{height:220px;width:100%;border-radius:14px;background:#f8efe6}
+@media(prefers-reduced-motion:no-preference){.start-skeleton i{animation:skeleton-pulse 1.6s ease-in-out infinite}}
+@keyframes skeleton-pulse{50%{opacity:.55}}
+
+/* Claims about accounts wait for /api/config, without moving the layout */
+.lp-trust[data-pending]{visibility:hidden}
+
+/* Account menu in the desktop nav */
+.account{position:relative}
+.account-button{display:flex;align-items:center;gap:8px;height:40px;max-width:260px;padding:0 10px 0 5px;border:1px solid #e3c9b7;border-radius:999px;background:var(--lp-paper,#fffdf8);color:var(--lp-body,#5b4a42);font-size:14px;font-weight:550}
+.account-button:hover,.account-button[aria-expanded=true]{background:#f6e9df;border-color:#d8b49e}
+.account-email{min-width:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-avatar{display:inline-grid;place-items:center;flex-shrink:0;overflow:hidden;border-radius:50%;background:#f3d6c6;color:#8e3f30;font-weight:700;line-height:1}
+.account-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.account-popover{position:absolute;top:calc(100% + 8px);right:0;z-index:60;width:max-content;min-width:250px;max-width:min(320px,calc(100vw - 32px));padding:6px;border:1px solid #e3c9b7;border-radius:14px;background:var(--lp-paper,#fffdf8);box-shadow:0 24px 44px -22px #4b352499,0 6px 14px -8px #4b352433}
+.account-who{display:flex;flex-direction:column;gap:2px;margin:0 0 4px;padding:10px 12px 10px;border-bottom:1px solid #f0e3d6;font-size:12.5px;line-height:1.4;color:var(--lp-muted,#6f5e54)}
+.account-who strong{font-size:14.5px;font-weight:600;color:var(--lp-ink,#3f302d);overflow-wrap:anywhere}
+.account-popover [role=menuitem]{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:0 12px;border-radius:9px;font-size:15px;font-weight:500;color:var(--lp-body,#5b4a42);text-align:left}
+.account-popover [role=menuitem]:hover,.account-popover [role=menuitem]:focus-visible{background:#f6e9df;color:var(--lp-ink,#3f302d)}
+.account-popover [role=menuitem]:focus-visible{outline:2px solid #ca744c;outline-offset:-2px}
+.account-popover [role=menuitem].is-danger{color:#a33b2b}
+/* The nav has room for the truncated email only from 1280px; below that the button is the avatar alone. */
+@media(max-width:1279px){.account-email,.account-button>svg{display:none}.account-button{justify-content:center;width:40px;padding:0}}
+@media(max-width:1180px){.lp-nav[data-account] .lp-nav-actions{gap:4px}}
+@media(max-width:960px){.lp-nav-actions .account{display:none}}
+
+/* Account section of the phone menu */
+.lp-menu-account{display:flex;flex-direction:column;margin-top:6px;padding-top:8px;border-top:1px solid #f0e3d6}
+.lp-menu-who{display:flex;align-items:center;gap:12px;margin:0;padding:8px 4px 6px}
+.lp-menu-who>span:last-child{display:flex;flex-direction:column;min-width:0;line-height:1.35}
+.lp-menu-who small{font-size:12.5px;color:var(--lp-muted,#6f5e54)}
+.lp-menu-who strong{font-size:15px;font-weight:600;color:var(--lp-ink,#3f302d);overflow-wrap:anywhere}
+.lp-menu-extras .lp-menu-account button{color:var(--lp-body,#5b4a42)}
+.lp-menu-extras .lp-menu-account button.is-danger{color:#a33b2b}
+
+/* My topics, right under the hero while signed in */
+.lp-topics{padding:0 0 88px;scroll-margin-top:12px}
+.lp-topics-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 20px;margin-bottom:20px}
+.lp-topics-head h2{margin:0;font-size:clamp(26px,2.6vw,32px);font-weight:700;line-height:1.1;letter-spacing:-.03em}
+.lp-topics-head h2:focus{outline:none}
+.lp-topics-head h2:focus-visible{outline:3px solid #ca744c;outline-offset:4px;border-radius:6px}
+.lp-topics-head p{margin:0;font-size:15px;color:var(--lp-muted,#6f5e54)}
+.lp-topics-note{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0;padding:18px 20px;border:1px dashed #e3c9b7;border-radius:14px;background:var(--lp-paper,#fffdf8);font-size:15px;color:var(--lp-body,#5b4a42)}
+.lp-topics-note .text-button{gap:6px;font-weight:600;color:var(--lp-coral-deep,#a84a39)}
+.lp-topic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin:0;padding:0;list-style:none}
+.lp-topic{display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px 18px 16px;border:1px solid #ead8cb;border-radius:16px;background:var(--lp-paper,#fffdf8);box-shadow:0 14px 28px -24px #7a4a3066}
+.lp-topic-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.lp-topic h3{margin:4px 0 0;font-size:17px;font-weight:650;line-height:1.3;letter-spacing:-.2px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.landing .lp-topic-delete{width:36px;height:36px;margin:-4px -6px 0 0;border-radius:9px;color:var(--lp-muted,#6f5e54)}
+.landing .lp-topic-delete:hover:not(:disabled){background:#f8e4dc;color:#a33b2b}
+.lp-topic-meta{margin:0;font-size:13.5px;color:var(--lp-muted,#6f5e54)}
+.lp-topic-bar{display:block;height:6px;margin-top:4px;overflow:hidden;border-radius:99px;background:#f0e2d6}
+.lp-topic-bar i{display:block;height:100%;border-radius:99px;background:#6f8a62}
+.lp-topic-progress{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;margin:0;font-size:13.5px;line-height:1.4;color:var(--lp-muted,#6f5e54)}
+.lp-topic-progress strong{font-weight:650;color:var(--lp-ink,#3f302d)}
+.landing .lp-topic-resume{align-self:flex-start;min-height:40px;margin-top:6px;padding:0 16px;font-size:14.5px;font-weight:600;border-color:#dcc3b2;background:var(--lp-paper,#fffdf8);color:var(--lp-ink,#3f302d)}
+.landing .lp-topic-resume:hover:not(:disabled){background:#fbeee3}
+
+/* Workspace: a failed save to the account. The header indicator says so on wide screens, a banner on narrow ones. */
+.save-indicator.is-failed{color:#a33b2b}
+@media(min-width:1191px){.save-failed-banner{display:none!important}}
+
+@media(max-width:760px){
+  .signin-panel{margin:14px 16px 16px;padding:16px 12px 12px}
+  .signin-line{font-size:15px}
+  .google-button{width:100%;min-width:0}
+  .start-skeleton{padding:16px}
+  .lp-topics{padding-bottom:64px}
+  .lp-topic-grid{grid-template-columns:minmax(0,1fr);gap:12px}
+  .landing .lp-topic-resume{min-height:44px}
+  .landing .lp-topic-delete{width:44px;height:44px;margin:-10px -10px -10px 0}
+  .lp-menu-extras .lp-menu-account button{min-height:48px}
+}

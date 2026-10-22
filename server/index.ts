@@ -13,6 +13,7 @@ import { createTeachTopic, openTeachState, runJudgeTurn, runTeachTurn } from './
 import { StepFunTeachProvider } from './teach-provider.js';
 import { DemoTeachProvider } from './teach-demo.js';
 import { synthesize, transcribe, voiceConfiguration } from './voice.js';
+import { authSettings, requireAccount } from './auth.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -30,16 +31,28 @@ app.use('/api', (req, res, next) => {
   }
   next();
 });
+// Accounts (Supabase Google sign-in): every /api route except /api/config and /api/health needs a valid access
+// token, but only when SUPABASE_URL and SUPABASE_ANON_KEY are both set. Otherwise this does nothing.
+app.use('/api', requireAccount);
 // Bound public, paid model calls even when a browser does not send Origin.
 const windows = new Map<string, { starts: number; count: number }>();
+/** Tests only: start every rate-limit window afresh. */
+export function clearRateLimits() { windows.clear(); }
 app.use(['/api/topic', '/api/teach', '/api/judge', '/api/concepts', '/api/turn', '/api/transcribe', '/api/speech'], (req, res, next) => {
   const now = Date.now();
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const ip = `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+  // Signed in: 60 per account, so a shared network doesn't share one budget, and a looser 180 per IP, so one client
+  // with many accounts can't multiply its budget. Accounts off: 60 per IP.
+  const budgets: [string, number][] = req.user ? [[`user:${req.user.id}`, 60], [ip, 180]] : [[ip, 60]];
   if (windows.size > 10000) for (const [key, value] of windows) if (now - value.starts >= 600000) windows.delete(key);
-  const window = windows.get(ip);
-  const entry = !window || now - window.starts >= 600000 ? { starts: now, count: 0 } : window;
-  windows.set(ip, entry);
-  if (++entry.count > 60) { res.setHeader('Retry-After', String(Math.ceil((entry.starts + 600000 - now) / 1000))); return res.status(429).json({ error: 'Too many study requests. Please try again in a few minutes.', code: 'RATE_LIMIT' }); }
+  let retryAt = 0;
+  for (const [client, limit] of budgets) {
+    const window = windows.get(client);
+    const entry = !window || now - window.starts >= 600000 ? { starts: now, count: 0 } : window;
+    windows.set(client, entry);
+    if (++entry.count > limit) retryAt = Math.max(retryAt, entry.starts + 600000);
+  }
+  if (retryAt) { res.setHeader('Retry-After', String(Math.ceil((retryAt - now) / 1000))); return res.status(429).json({ error: 'Too many study requests. Please try again in a few minutes.', code: 'RATE_LIMIT' }); }
   next();
 });
 const gate = new RevisionGate();
@@ -50,28 +63,30 @@ const provider = (mode: 'live' | 'demo', sampleId?: 'analysis' | 'research') => 
   }
   return new StepFunProvider();
 };
-app.get('/api/config', (_req, res) => res.json({ liveAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim() && (!process.env.VERCEL || process.env.SESSION_SECRET?.trim())), voiceAvailable: voiceConfiguration().available, judgeDebugAvailable: process.env.ENABLE_JUDGE_DEBUG === 'true', provider: 'Step 5 Preview', limits: LIMITS }));
+app.get('/api/config', (_req, res) => res.json({ liveAvailable: Boolean(process.env.STEPFUN_API_KEY?.trim() && (!process.env.VERCEL || process.env.SESSION_SECRET?.trim())), voiceAvailable: voiceConfiguration().available, judgeDebugAvailable: process.env.ENABLE_JUDGE_DEBUG === 'true', provider: 'Step 5 Preview', limits: LIMITS,
+  // The public Supabase URL and anon key, or null when accounts are off. The browser builds its Supabase client from this.
+  auth: authSettings() }));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.post('/api/topic', async (req, res) => {
   const request = createTopicSchema.parse(req.body);
   const teachProvider = request.mode === 'demo' ? new DemoTeachProvider(request.sampleId ?? 'analysis') : new StepFunTeachProvider();
-  res.json(await createTeachTopic(request, teachProvider));
+  res.json(await createTeachTopic(request, teachProvider, req.user?.id));
 });
 app.post('/api/teach', async (req, res) => {
   const request = teachTurnSchema.parse(req.body);
-  const state = openTeachState(request.stateToken, request.topicId, request.documents);
+  const state = openTeachState(request.stateToken, request.topicId, request.documents, req.user?.id);
   gate.begin({ sessionId: request.topicId, turnId: request.turnId, revision: request.revision });
   const teachProvider = state.sample ? new DemoTeachProvider(state.sampleId ?? 'analysis') : new StepFunTeachProvider();
-  const result = await runTeachTurn(request, teachProvider, process.env.ENABLE_JUDGE_DEBUG === 'true');
+  const result = await runTeachTurn(request, teachProvider, process.env.ENABLE_JUDGE_DEBUG === 'true', req.user?.id);
   gate.assertCurrent({ sessionId: request.topicId, turnId: request.turnId, revision: request.revision });
   if (!res.destroyed) res.json(result);
 });
 // Background grading: the Step 5 Judge grades messages Stu has already answered (and writes the teach-back on completion).
 app.post('/api/judge', async (req, res) => {
   const request = judgeTurnSchema.parse(req.body);
-  const state = openTeachState(request.stateToken, request.topicId, request.documents);
+  const state = openTeachState(request.stateToken, request.topicId, request.documents, req.user?.id);
   const teachProvider = state.sample ? new DemoTeachProvider(state.sampleId ?? 'analysis') : new StepFunTeachProvider();
-  const result = await runJudgeTurn(request, teachProvider, process.env.ENABLE_JUDGE_DEBUG === 'true');
+  const result = await runJudgeTurn(request, teachProvider, process.env.ENABLE_JUDGE_DEBUG === 'true', req.user?.id);
   if (!res.destroyed) res.json(result);
 });
 app.post('/api/concepts', async (req, res) => {
@@ -88,7 +103,8 @@ app.post('/api/turn', async (req, res) => {
   gate.assertCurrent(request);
   if (!res.destroyed) res.json({ ...result, liveResponse: studyProvider instanceof StepFunProvider && studyProvider.successfulResponses > 0 && result.liveResponse === true });
 });
-// The server stores no uploaded files or conversations; clear only its transient revision guard.
+// The API server stores no uploaded files or conversations (with accounts on, the browser saves them to the
+// signed-in user's own Supabase row and bucket); clear only its transient revision guard.
 app.delete('/api/session/:id', (req, res) => { gate.remove(req.params.id); res.status(204).end(); });
 
 const audioTypes: Record<string, string> = { 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'video/mp4': 'm4a', 'audio/x-m4a': 'm4a' };
